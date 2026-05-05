@@ -1,0 +1,84 @@
+{
+  "name": "@pionne/react-native",
+  "version": "0.4.2",
+  "description": "Mini Sentry mobile-first SDK for React Native + Expo. Auto-captures JS crashes, unhandled rejections, breadcrumbs (console + fetch), screenshots. Bundle ID auto-pinning, PII scrubber, source map resolution, Error Boundary, sample rate. CLI bundled.",
+  "license": "MIT",
+  "author": "AGKG Creations",
+  "homepage": "https://pionne.agkgcreations.fr",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agkgcreations/pionne-sdk-react-native.git"
+  },
+  "bugs": {
+    "url": "https://github.com/agkgcreations/pionne-sdk-react-native/issues"
+  },
+  "keywords": [
+    "pionne",
+    "react-native",
+    "expo",
+    "error-monitoring",
+    "crash-reporting",
+    "sentry-alternative",
+    "observability"
+  ],
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "react-native": "./src/index.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "scripts",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "pionne": "./scripts/cli.mjs"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "node ./scripts/postinstall.mjs",
+    "prepublishOnly": "npm run typecheck && npm run build"
+  },
+  "peerDependencies": {
+    "expo-application": "*",
+    "expo-device": "*",
+    "expo-updates": "*",
+    "react-native": ">=0.70.0"
+  },
+  "peerDependenciesMeta": {
+    "expo-application": {
+      "optional": true
+    },
+    "expo-device": {
+      "optional": true
+    },
+    "expo-updates": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-native": "^0.73.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
