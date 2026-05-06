@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.1 — 2026-05-06
+
+### Added
+
+- `npx @pionne/react-native setup`: pre-check of existing EAS environment
+  variables across `production`, `preview` and `development` before any
+  modification. If `PIONNE_AUTH_TOKEN`, `PIONNE_PROJECT_ID` or `PIONNE_API`
+  are already set, the wizard prints exactly which env-var pair will be
+  overwritten and asks `Overwrite? (y/N)`. On a fresh install, no prompt is
+  shown — installation proceeds silently.
+
 ## 0.6.0 — 2026-05-06
 
 ### Added

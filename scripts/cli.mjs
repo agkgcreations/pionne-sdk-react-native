@@ -211,12 +211,6 @@ async function setup() {
   log(`  PIONNE_API         = ${api}`);
   log(``);
 
-  rl.close();
-  // Confirm step removed in 0.6.0 — the config is printed just above and
-  // the operation is reversible (re-running setup overwrites). Cancelling
-  // is now Ctrl-C before this line.
-
-
   // EAS migrated `eas secret:*` → `eas env:*` (env vars per environment).
   // We push to the three standard environments so the hook works whichever
   // build profile the user picks (development / preview / production).
@@ -226,6 +220,29 @@ async function setup() {
     ['PIONNE_PROJECT_ID', String(projectId)],
     ['PIONNE_API', api],
   ];
+  const varNames = entries.map(([n]) => n);
+
+  // Pre-check: list existing PIONNE_* vars across the three envs so we can
+  // warn the user explicitly before overwriting. Silent fallback if eas-cli
+  // doesn't support the listing format we expect (we just proceed).
+  log(`${YELLOW}→ ${_('Checking existing EAS variables...', 'Vérification des variables EAS existantes...')}${RESET}`);
+  const existing = listExistingPionneVars(envs, varNames);
+  if (existing.length === 0) {
+    ok(_('No existing PIONNE_* variables — fresh install.', 'Aucune variable PIONNE_* existante — installation propre.'));
+  } else {
+    warn(_('The following PIONNE_* variables will be overwritten:', 'Les variables PIONNE_* suivantes seront écrasées :'));
+    for (const { env, names } of existing) {
+      log(`  • ${env}: ${names.join(', ')}`);
+    }
+    log('');
+    const ans = (await rl.question(_('Overwrite? (y/N): ', 'Écraser ? (y/N) : '))).trim().toLowerCase();
+    if (ans !== 'y') {
+      rl.close();
+      log(_('Cancelled. Existing variables left untouched.', 'Annulé. Variables existantes inchangées.'));
+      return;
+    }
+  }
+  rl.close();
 
   for (const env of envs) {
     for (const [name] of entries) {
@@ -358,6 +375,33 @@ async function uploadSourcemaps() {
 function hasCommand(name) {
   const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', [name], { stdio: 'ignore' });
   return r.status === 0;
+}
+
+/**
+ * Probes `eas env:list` for each environment and reports which of the
+ * provided var names already exist. Best-effort: failures are silent and
+ * yield an empty list so the wizard can still proceed.
+ *
+ * @param {string[]} envs   - e.g. ['production', 'preview', 'development']
+ * @param {string[]} names  - e.g. ['PIONNE_AUTH_TOKEN', ...]
+ * @returns {Array<{env: string, names: string[]}>}
+ */
+function listExistingPionneVars(envs, names) {
+  const found = [];
+  for (const env of envs) {
+    const r = spawnSync(
+      'eas',
+      ['env:list', '--environment', env, '--format', 'short', '--non-interactive'],
+      { stdio: 'pipe', encoding: 'utf8' },
+    );
+    if (r.status !== 0) continue;
+    const out = String(r.stdout || '');
+    // Match each name as a whole word at the start of any line, the way
+    // `eas env:list --format short` prints them.
+    const present = names.filter((n) => new RegExp(`(^|\\s)${n}(\\s|$)`, 'm').test(out));
+    if (present.length) found.push({ env, names: present });
+  }
+  return found;
 }
 
 async function fetchWithTimeout(url, opts = {}, timeoutMs = 15000) {
