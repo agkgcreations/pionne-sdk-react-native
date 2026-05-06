@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.5.0 — 2026-05-06
+
+### Added (server-side, SDK API unchanged)
+
+- **2FA TOTP** for dashboard account — protect your bug feed with a 6-digit
+  code from any authenticator app.
+- **Audit log** of every sensitive action (login, password/email change,
+  token regenerate, project delete) with 1-year retention and a dedicated
+  Activity page in the mobile app.
+- **Anomaly detection** — projects whose hourly volume crosses 10× their
+  7-day baseline trigger an email alert; 50× also auto-pauses for 1h to
+  neutralise leaked tokens.
+- **Server-side PII scrub** (defense-in-depth) — emails, JWTs and card
+  numbers are re-redacted on ingest even if `scrubPii: false` was set on
+  the client by mistake.
+- **Token grace period** — when regenerating a token you can keep the old
+  one valid for 24h, enabling zero-downtime rotation.
+
+### Fixed (server)
+
+- Race condition on `bundle_id` auto-pinning closed via atomic
+  `WHERE bundle_id IS NULL` UPDATE — previous code allowed concurrent
+  events to overwrite each other on the very first event of a project.
+
+## 0.4.2 — 2026-05-05
+
+- Repository URL pointing to `agkgcreations/pionne-sdk-react-native`.
+
+## 0.4.1 — 2026-05-05
+
+- Internal cleanup.
+
 ## 0.4.0 — 2026-05-05
 
 ### Added
