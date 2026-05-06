@@ -70,7 +70,7 @@ Usage:
       CI, ou flags). Utilisé par eas-build-on-success.sh.
 
 Variables d'environnement:
-  PIONNE_AUTH_TOKEN     Token Sanctum (eas secret:create)
+  PIONNE_AUTH_TOKEN     Token Sanctum (eas env:create --visibility secret)
   PIONNE_PROJECT_ID     ID du projet Pionne
   PIONNE_API            Endpoint API (default: https://pionne.agkgcreations.fr/api)
   EAS_BUILD_PLATFORM    Auto-fourni par EAS Build (ios|android)
@@ -182,22 +182,44 @@ async function setup() {
     return;
   }
 
-  for (const name of ['PIONNE_AUTH_TOKEN', 'PIONNE_PROJECT_ID', 'PIONNE_API']) {
-    spawnSync('eas', ['secret:delete', '--scope', 'project', '--name', name, '--non-interactive'], {
-      stdio: 'ignore',
-    });
-  }
-  for (const [name, value] of [
+  // EAS migrated `eas secret:*` → `eas env:*` (env vars per environment).
+  // We push to the three standard environments so the hook works whichever
+  // build profile the user picks (development / preview / production).
+  const envs = ['production', 'preview', 'development'];
+  const entries = [
     ['PIONNE_AUTH_TOKEN', authToken],
     ['PIONNE_PROJECT_ID', String(projectId)],
     ['PIONNE_API', api],
-  ]) {
-    const r = spawnSync(
-      'eas',
-      ['secret:create', '--scope', 'project', '--name', name, '--value', value, '--type', 'string', '--non-interactive'],
-      { stdio: 'inherit' },
-    );
-    if (r.status !== 0) die(`eas secret:create ${name} a échoué`);
+  ];
+
+  for (const env of envs) {
+    for (const [name] of entries) {
+      // Best-effort delete — silent if it doesn't exist yet.
+      spawnSync(
+        'eas',
+        ['env:delete', '--variable-name', name, '--variable-environment', env, '--non-interactive'],
+        { stdio: 'ignore' },
+      );
+    }
+  }
+
+  for (const env of envs) {
+    for (const [name, value] of entries) {
+      const r = spawnSync(
+        'eas',
+        [
+          'env:create',
+          '--name', name,
+          '--value', value,
+          '--visibility', 'secret',
+          '--environment', env,
+          '--non-interactive',
+          '--force',
+        ],
+        { stdio: 'inherit' },
+      );
+      if (r.status !== 0) die(`eas env:create ${name} (${env}) a échoué`);
+    }
   }
 
   // 5. Install eas-build-on-success.sh

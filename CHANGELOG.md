@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.7 — 2026-05-06
+
+### Changed
+
+- `npx @pionne/react-native setup`: migrated from the deprecated
+  `eas secret:*` commands to the new `eas env:*` API. Variables are now
+  pushed to all three EAS environments (development / preview / production)
+  with `--visibility secret` so the build hook works on any profile.
+- Each variable is deleted (best-effort) and recreated, so re-running
+  `setup` cleanly overrides previous values without `already exists` errors.
+
 ## 0.5.6 — 2026-05-06
 
 ### Improved
