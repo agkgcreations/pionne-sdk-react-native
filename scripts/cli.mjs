@@ -304,49 +304,23 @@ async function getJson(url, token) {
   return res.json().catch(() => ({}));
 }
 
-async function readHidden() {
+async function readHidden(rl) {
   return new Promise((resolve) => {
-    let buf = '';
-    const isTTY = input.isTTY;
-    if (isTTY) input.setRawMode(true);
-    input.resume();
-    input.setEncoding('utf8');
-
-    const cleanup = () => {
-      input.removeListener('data', onData);
-      if (isTTY) input.setRawMode(false);
+    // Override readline's internal echo so each keystroke renders as a
+    // bullet instead of the actual character. Newlines pass through so the
+    // prompt + final \n still display. Approach used by inquirer/prompts.
+    const original = rl._writeToOutput;
+    rl._writeToOutput = function (s) {
+      if (s.includes('\n') || s.includes('\r')) {
+        rl.output.write(s);
+      } else {
+        rl.output.write('\u2022'.repeat(s.length));
+      }
     };
-
-    const onData = (chunk) => {
-      const c = chunk.toString();
-      // Ctrl-C — abort cleanly.
-      if (c === '\u0003') {
-        cleanup();
-        output.write('\n');
-        process.exit(130);
-      }
-      // Enter / Ctrl-D — done.
-      if (c === '\n' || c === '\r' || c === '\u0004') {
-        cleanup();
-        output.write('\n');
-        resolve(buf);
-        return;
-      }
-      // Backspace (DEL or BS).
-      if (c === '\u007F' || c === '\b') {
-        if (buf.length > 0) {
-          buf = buf.slice(0, -1);
-          output.write('\b \b');
-        }
-        return;
-      }
-      // Skip other control chars.
-      if (c.length === 1 && c < ' ') return;
-      buf += c;
-      output.write('\u2022');
-    };
-
-    input.on('data', onData);
+    rl.question('', (line) => {
+      rl._writeToOutput = original;
+      resolve(line);
+    });
   });
 }
 

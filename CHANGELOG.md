@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.3 — 2026-05-06
+
+### Fixed
+
+- `npx @pionne/react-native setup`: 0.5.2 still showed each keystroke
+  alongside the bullet because the readline interface was echoing in
+  parallel. Replaced the raw-mode hack with the `_writeToOutput` override
+  pattern used by inquirer/prompts — keystrokes are now fully masked, not
+  interleaved with bullets.
+
 ## 0.5.2 — 2026-05-06
 
 ### Fixed
