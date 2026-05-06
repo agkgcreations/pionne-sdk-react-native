@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.6 — 2026-05-06
+
+### Improved
+
+- `npx @pionne/react-native setup`: every fetch now has a 15s timeout, so the
+  wizard fails fast with "Network error: Timeout" instead of hanging silently.
+- 2FA prompt now uses `rl.question()` directly (instead of write + question
+  with empty prompt) so the label is reliably displayed after the password.
+- A "Mot de passe OK — 2FA requise" line is printed before the 2FA prompt to
+  reassure the user the password was accepted.
+
 ## 0.5.5 — 2026-05-06
 
 ### Fixed

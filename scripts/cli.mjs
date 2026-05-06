@@ -115,18 +115,28 @@ async function setup() {
   const password = await readHidden(rl, `Mot de passe Pionne: `);
 
   log(`${YELLOW}→ Login sur ${api}...${RESET}`);
-  let loginRes = await postJson(`${api}/auth/login`, { email, password });
+  let loginRes;
+  try {
+    loginRes = await postJson(`${api}/auth/login`, { email, password });
+  } catch (e) {
+    die(`Network error: ${e.message}`);
+  }
 
   // Two-factor auth — server asks for a TOTP code as a second step.
   if (loginRes?.requires_totp && loginRes.totp_token) {
-    output.write(`Code 2FA (6 chiffres) ou code de récupération: `);
-    const totpInput = (await rl.question('')).trim();
+    log(`${GREEN}✓${RESET} Mot de passe OK — 2FA requise.`);
+    const totpInput = (await rl.question(`Code 2FA (6 chiffres) ou code de récupération: `)).trim();
+    if (!totpInput) die('Aucun code 2FA fourni.');
     const isRecovery = totpInput.includes('-') || totpInput.length > 6;
-    loginRes = await postJson(`${api}/auth/login/totp`, {
-      totp_token: loginRes.totp_token,
-      code: isRecovery ? undefined : totpInput,
-      recovery_code: isRecovery ? totpInput : undefined,
-    });
+    try {
+      loginRes = await postJson(`${api}/auth/login/totp`, {
+        totp_token: loginRes.totp_token,
+        code: isRecovery ? undefined : totpInput,
+        recovery_code: isRecovery ? totpInput : undefined,
+      });
+    } catch (e) {
+      die(`Network error during 2FA: ${e.message}`);
+    }
   }
 
   if (!loginRes?.token) {
@@ -287,8 +297,23 @@ function hasCommand(name) {
   return r.status === 0;
 }
 
+async function fetchWithTimeout(url, opts = {}, timeoutMs = 15000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...opts, signal: ctrl.signal });
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      throw new Error(`Timeout (${timeoutMs / 1000}s) calling ${url}. Vérifie ta connexion ou le serveur.`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function postJson(url, body) {
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(body),
@@ -297,7 +322,7 @@ async function postJson(url, body) {
 }
 
 async function getJson(url, token) {
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
   });
   return res.json().catch(() => ({}));
