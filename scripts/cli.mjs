@@ -23,6 +23,13 @@ const YELLOW = '\x1b[33m';
 const RED = '\x1b[31m';
 const GREY = '\x1b[90m';
 
+
+// ─── i18n helpers ────────────────────────────────────────────────────────
+// Bilingual strings — chosen at wizard start. Keeping it inline avoids
+// pulling in an i18n library for a 50-string CLI.
+let _lang = 'en';
+const _ = (en, fr) => (_lang === 'fr' ? fr : en);
+
 const log = (s) => console.log(s);
 const ok = (s) => log(`${GREEN}✓${RESET} ${s}`);
 const warn = (s) => log(`${YELLOW}⚠${RESET} ${s}`);
@@ -86,23 +93,32 @@ Docs: https://pionne.agkgcreations.fr/docs
 async function setup() {
   log(`\n${VIOLET}${BOLD}=== Pionne — Setup ===${RESET}\n`);
 
+  // 0. Language pick — default English (npm ecosystem default).
+  {
+    const ttyRl = createInterface({ input, output });
+    const ans = (await ttyRl.question(`Language [en/fr] (en): `)).trim().toLowerCase();
+    ttyRl.close();
+    if (ans === 'fr' || ans === 'french' || ans === 'français') _lang = 'fr';
+  }
+
+
   const cwd = process.env.INIT_CWD || process.cwd();
   if (!existsSync(join(cwd, 'app.json')) && !existsSync(join(cwd, 'package.json'))) {
-    die(`Run this command from the root of your Expo project (where app.json lives).`);
+    die(_(`Run this command from the root of your Expo project (where app.json lives).`, `Lance cette commande depuis la racine de ton projet Expo (où se trouve app.json).`));
   }
 
   // 1. Vérifie eas-cli
   if (!hasCommand('eas')) {
-    warn(`eas-cli not installed. Run: npm install -g eas-cli`);
+    warn(_(`eas-cli not installed. Run: npm install -g eas-cli`, `eas-cli n'est pas installé. Lance: npm install -g eas-cli`));
     return;
   }
 
   let easUser;
   try {
     easUser = execSync('eas whoami', { stdio: 'pipe' }).toString().trim();
-    ok(`Logged into EAS: ${easUser}`);
+    ok(_(`Logged into EAS: ${easUser}`, `Connecté à EAS : ${easUser}`));
   } catch {
-    warn(`Not logged into EAS. Run: eas login`);
+    warn(_(`Not logged into EAS. Run: eas login`, `Pas connecté à EAS. Lance: eas login`));
     return;
   }
 
@@ -110,11 +126,11 @@ async function setup() {
   const api = process.env.PIONNE_API || 'https://pionne.agkgcreations.fr/api';
   const rl = createInterface({ input, output });
 
-  const email = await rl.question(`Pionne email: `);
+  const email = await rl.question(_(`Pionne email: `, `Email Pionne : `));
   // Hide stdin during password input.
-  const password = await readHidden(rl, `Pionne password: `);
+  const password = await readHidden(rl, _(`Pionne password: `, `Mot de passe Pionne : `));
 
-  log(`${YELLOW}→ Logging in to ${api}...${RESET}`);
+  log(`${YELLOW}→ ${_(`Logging in to`, `Connexion à`)} ${api}...${RESET}`);
   let loginRes;
   try {
     loginRes = await postJson(`${api}/auth/login`, { email, password });
@@ -124,9 +140,9 @@ async function setup() {
 
   // Two-factor auth — server asks for a TOTP code as a second step.
   if (loginRes?.requires_totp && loginRes.totp_token) {
-    log(`${GREEN}✓${RESET} Password OK — 2FA required.`);
-    const totpInput = (await rl.question(`2FA code (6 digits) or recovery code: `)).trim();
-    if (!totpInput) die('No 2FA code provided.');
+    log(`${GREEN}✓${RESET} ${_(`Password OK — 2FA required.`, `Mot de passe OK — 2FA requise.`)}`);
+    const totpInput = (await rl.question(_(`2FA code (6 digits) or recovery code: `, `Code 2FA (6 chiffres) ou code de récupération : `))).trim();
+    if (!totpInput) die(_('No 2FA code provided.', 'Aucun code 2FA fourni.'));
     const isRecovery = totpInput.includes('-') || totpInput.length > 6;
     try {
       loginRes = await postJson(`${api}/auth/login/totp`, {
@@ -140,47 +156,66 @@ async function setup() {
   }
 
   if (!loginRes?.token) {
-    die(`Login failed: ${JSON.stringify(loginRes)}`);
+    die(`${_(`Login failed`, `Connexion refusée`)}: ${JSON.stringify(loginRes)}`);
   }
   const authToken = loginRes.token;
-  ok(`Login OK`);
+  ok(_(`Login OK`, `Connexion OK`));
 
   // 3. List projects
-  log(`${YELLOW}→ Fetching projects...${RESET}`);
+  log(`${YELLOW}→ ${_(`Fetching projects...`, `Récupération des projets...`)}${RESET}`);
   const { projects = [] } = await getJson(`${api}/projects`, authToken);
   if (!projects.length) {
-    die(`No projects yet. Create one in the Pionne mobile app first.`);
+    die(_(`No projects yet. Create one in the Pionne mobile app first.`, `Aucun projet. Crée-en un dans l'app Pionne d'abord.`));
   }
 
   let projectId;
+  // Try to auto-pick by matching `app.json:expo.name` against project names
+  // (case-insensitive, exact match). Saves the user from typing a number.
+  let appJsonName;
+  try {
+    const aj = JSON.parse(readFileSync(join(cwd, 'app.json'), 'utf8'));
+    appJsonName = (aj?.expo?.name ?? '').toLowerCase();
+  } catch {}
+  const exactMatches = appJsonName
+    ? projects.filter((p) => p.name.toLowerCase() === appJsonName)
+    : [];
+
   if (projects.length === 1) {
     projectId = projects[0].id;
-    ok(`Single project, auto-selected: [id=${projectId}] ${projects[0].name}`);
+    ok(_(
+      `Single project, auto-selected: [id=${projectId}] ${projects[0].name}`,
+      `Un seul projet, sélection auto : [id=${projectId}] ${projects[0].name}`,
+    ));
+  } else if (exactMatches.length === 1) {
+    projectId = exactMatches[0].id;
+    ok(_(
+      `Auto-picked from app.json:expo.name: [id=${projectId}] ${exactMatches[0].name}`,
+      `Sélection auto via app.json:expo.name : [id=${projectId}] ${exactMatches[0].name}`,
+    ));
   } else {
     log('');
     projects.forEach((p, i) => {
       log(`  ${i + 1}) [id=${p.id}] ${p.name} (${p.platform})`);
     });
     log('');
-    const idx = await rl.question(`Project number: `);
+    const idx = await rl.question(_(`Project number: `, `Numéro du projet : `));
     projectId = projects[parseInt(idx, 10) - 1]?.id;
-    if (!projectId) die(`Invalid number.`);
+    if (!projectId) die(_(`Invalid number.`, `Numéro invalide.`));
   }
 
   // 4. Confirm + create EAS Secrets
   log(``);
-  log(`${BOLD}EAS environment variables to set:${RESET}`);
+  log(`${BOLD}${_(`EAS environment variables to set:`, `Variables EAS à configurer :`)}${RESET}`);
   log(`  PIONNE_AUTH_TOKEN  = ${authToken.slice(0, 20)}...`);
   log(`  PIONNE_PROJECT_ID  = ${projectId}`);
   log(`  PIONNE_API         = ${api}`);
   log(``);
 
-  const confirm = await rl.question(`Confirm (y/N)? `);
   rl.close();
-  if (confirm.toLowerCase() !== 'y') {
-    log(`Cancelled.`);
-    return;
-  }
+  // Confirm step removed in 0.6.0 — the config is printed just above and
+  // the operation is reversible (re-running setup overwrites). Cancelling
+  // is now Ctrl-C before this line.
+
 
   // EAS migrated `eas secret:*` → `eas env:*` (env vars per environment).
   // We push to the three standard environments so the hook works whichever
@@ -218,7 +253,7 @@ async function setup() {
         ],
         { stdio: 'inherit' },
       );
-      if (r.status !== 0) die(`eas env:create ${name} (${env}) failed`);
+      if (r.status !== 0) die(`eas env:create ${name} (${env}) ${_(`failed`, `a échoué`)}`);
     }
   }
 
@@ -226,19 +261,19 @@ async function setup() {
   const hookPath = join(cwd, 'eas-build-on-success.sh');
   const hookContents = readPackageFile('templates/eas-build-on-success.sh');
   if (existsSync(hookPath)) {
-    warn(`eas-build-on-success.sh already exists — not overwritten.`);
+    warn(_(`eas-build-on-success.sh already exists — not overwritten.`, `eas-build-on-success.sh existe déjà — non écrasé.`));
   } else {
     writeFileSync(hookPath, hookContents, { mode: 0o755 });
-    ok(`EAS hook written: eas-build-on-success.sh`);
+    ok(_(`EAS hook written: eas-build-on-success.sh`, `Hook EAS écrit : eas-build-on-success.sh`));
   }
 
-  log(`\n${GREEN}${BOLD}✓ Setup done.${RESET}`);
-  log(`From now on, every ${BOLD}eas build${RESET} will upload its sourcemaps automatically.`);
+  log(`\n${GREEN}${BOLD}✓ ${_(`Setup done.`, `Setup terminé.`)}${RESET}`);
+  log(_(`From now on, every ${BOLD}eas build${RESET} will upload its sourcemaps automatically.`, `Désormais, chaque ${BOLD}eas build${RESET} upload ses sourcemaps tout seul.`));
 
   // Final verification — list the production env vars so the user sees them
   // confirmed without having to type the command themselves. Read-only, the
   // `secret` visibility ensures values stay masked.
-  log(`\n${YELLOW}→ Verifying — EAS env vars (production):${RESET}`);
+  log(`\n${YELLOW}→ ${_(`Verifying — EAS env vars (production):`, `Vérification — variables EAS (production) :`)}${RESET}`);
   spawnSync('eas', ['env:list', '--environment', 'production'], { stdio: 'inherit' });
 }
 

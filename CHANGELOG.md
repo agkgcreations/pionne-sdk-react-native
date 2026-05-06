@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.0 — 2026-05-06
+
+### Added
+
+- `npx @pionne/react-native setup`: bilingual prompts. The wizard now asks
+  for a language at startup (`Language [en/fr] (en):`) and routes every
+  user-facing message through an `_(en, fr)` helper. Default stays English
+  for npm-ecosystem consistency.
+- Smart project auto-pick: when `app.json:expo.name` matches exactly one
+  Pionne project (case-insensitive), the wizard skips the "Project number"
+  prompt and uses that project. Falls back to the manual picker if 0 or
+  multiple matches.
+
+### Removed
+
+- `Confirm (y/N)?` step at the end of the config preview. The same data is
+  printed for visual review just above, and the whole `setup` is reversible
+  (re-run overwrites). Use Ctrl-C before validation to abort.
+
 ## 0.5.8 — 2026-05-06
 
 ### Changed

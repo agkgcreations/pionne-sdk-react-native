@@ -1,6 +1,6 @@
 {
   "name": "@pionne/react-native",
-  "version": "0.5.8",
+  "version": "0.6.0",
   "description": "Mini Sentry mobile-first SDK for React Native + Expo. Auto-captures JS crashes, unhandled rejections, breadcrumbs (console + fetch), screenshots. Bundle ID auto-pinning, PII scrubber, source map resolution, Error Boundary, sample rate. CLI bundled.",
   "license": "MIT",
   "author": "AGKG Creations",
