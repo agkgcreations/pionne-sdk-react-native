@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.1 — 2026-05-06
+
+### Fixed
+
+- `npx @pionne/react-native setup` now handles 2FA-protected accounts: when
+  the server returns `requires_totp`, the CLI prompts for the 6-digit code
+  (or a recovery code with `-`) and completes the login second step. Before
+  this fix, the wizard failed instantly on accounts with TOTP enabled.
+
 ## 0.5.0 — 2026-05-06
 
 ### Added (server-side, SDK API unchanged)

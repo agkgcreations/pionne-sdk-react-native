@@ -116,7 +116,20 @@ async function setup() {
   const password = await readHidden(rl);
 
   log(`${YELLOW}→ Login sur ${api}...${RESET}`);
-  const loginRes = await postJson(`${api}/auth/login`, { email, password });
+  let loginRes = await postJson(`${api}/auth/login`, { email, password });
+
+  // Two-factor auth — server asks for a TOTP code as a second step.
+  if (loginRes?.requires_totp && loginRes.totp_token) {
+    output.write(`Code 2FA (6 chiffres) ou code de récupération: `);
+    const totpInput = (await rl.question('')).trim();
+    const isRecovery = totpInput.includes('-') || totpInput.length > 6;
+    loginRes = await postJson(`${api}/auth/login/totp`, {
+      totp_token: loginRes.totp_token,
+      code: isRecovery ? undefined : totpInput,
+      recovery_code: isRecovery ? totpInput : undefined,
+    });
+  }
+
   if (!loginRes?.token) {
     die(`Login échoué: ${JSON.stringify(loginRes)}`);
   }
