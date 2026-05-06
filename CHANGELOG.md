@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.4 — 2026-05-06
+
+### Fixed
+
+- `npx @pionne/react-native setup` was eating the "Mot de passe Pionne:"
+  prompt itself in 0.5.3 because `rl.question('')` re-draws the current line
+  through the masking `_writeToOutput` override. Now the label is passed as
+  the prompt argument and the override lets the first write through.
+
 ## 0.5.3 — 2026-05-06
 
 ### Fixed

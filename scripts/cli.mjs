@@ -112,8 +112,7 @@ async function setup() {
 
   const email = await rl.question(`Email Pionne: `);
   // Hide stdin during password input.
-  output.write(`Mot de passe Pionne: `);
-  const password = await readHidden(rl);
+  const password = await readHidden(rl, `Mot de passe Pionne: `);
 
   log(`${YELLOW}→ Login sur ${api}...${RESET}`);
   let loginRes = await postJson(`${api}/auth/login`, { email, password });
@@ -304,20 +303,27 @@ async function getJson(url, token) {
   return res.json().catch(() => ({}));
 }
 
-async function readHidden(rl) {
+async function readHidden(rl, prompt = '') {
   return new Promise((resolve) => {
-    // Override readline's internal echo so each keystroke renders as a
-    // bullet instead of the actual character. Newlines pass through so the
-    // prompt + final \n still display. Approach used by inquirer/prompts.
+    // Override readline's internal echo so each user keystroke renders as a
+    // bullet. The very first _writeToOutput call is the prompt itself —
+    // we let it through. Everything after is user input → mask. Newlines
+    // also pass through so <Enter> draws a line break.
+    let promptDrawn = false;
     const original = rl._writeToOutput;
     rl._writeToOutput = function (s) {
-      if (s.includes('\n') || s.includes('\r')) {
+      if (!promptDrawn) {
+        promptDrawn = true;
+        rl.output.write(s);
+        return;
+      }
+      if (/[\n\r]/.test(s)) {
         rl.output.write(s);
       } else {
         rl.output.write('\u2022'.repeat(s.length));
       }
     };
-    rl.question('', (line) => {
+    rl.question(prompt, (line) => {
       rl._writeToOutput = original;
       resolve(line);
     });
