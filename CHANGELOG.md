@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.2 — 2026-05-06
+
+### Fixed
+
+- `npx @pionne/react-native setup` now properly hides the password while you
+  type it. Switches the terminal into raw mode and renders one `•` per
+  keystroke; backspace works; Ctrl-C aborts cleanly. Previously the password
+  was echoed in plain text by the terminal even though the `readHidden`
+  function tried to capture it.
+
 ## 0.5.1 — 2026-05-06
 
 ### Fixed
