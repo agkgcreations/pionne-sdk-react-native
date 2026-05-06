@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.5 — 2026-05-06
+
+### Fixed
+
+- `npx @pionne/react-native setup`: the `_writeToOutput` masking pattern from
+  0.5.3-0.5.4 broke on Node 22+ where TTY echo bypasses the override entirely
+  (password rendered in cleartext, Enter then froze the wizard). Replaced
+  with the npm-CLI battle-tested combination: `rl.pause()` + `setRawMode(true)`
+  + manual keystroke handler that writes one `•` per char, supports Backspace
+  and Ctrl-C, and resumes readline at the end. Works across Node 18–24.
+
 ## 0.5.4 — 2026-05-06
 
 ### Fixed

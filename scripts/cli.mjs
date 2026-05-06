@@ -304,29 +304,59 @@ async function getJson(url, token) {
 }
 
 async function readHidden(rl, prompt = '') {
+  // Pause readline so it stops handling stdin (and stops echoing). We take
+  // over the keystrokes ourselves in raw mode and resume readline at the end.
+  // This pattern is what npm CLI uses for password prompts and works across
+  // every Node version (readline.question + _writeToOutput is fragile from
+  // Node 22+, where TTY echo bypasses _writeToOutput).
+  rl.pause();
+  output.write(prompt);
+
   return new Promise((resolve) => {
-    // Override readline's internal echo so each user keystroke renders as a
-    // bullet. The very first _writeToOutput call is the prompt itself —
-    // we let it through. Everything after is user input → mask. Newlines
-    // also pass through so <Enter> draws a line break.
-    let promptDrawn = false;
-    const original = rl._writeToOutput;
-    rl._writeToOutput = function (s) {
-      if (!promptDrawn) {
-        promptDrawn = true;
-        rl.output.write(s);
+    let buf = '';
+    const isTTY = input.isTTY;
+    const wasRaw = input.isRaw;
+    if (isTTY) input.setRawMode(true);
+    input.resume();
+    input.setEncoding('utf8');
+
+    const cleanup = () => {
+      input.removeListener('data', onData);
+      if (isTTY) input.setRawMode(wasRaw);
+      // Resume readline for subsequent prompts.
+      rl.resume();
+    };
+
+    const onData = (chunk) => {
+      const c = chunk.toString();
+      // Ctrl-C — abort cleanly.
+      if (c === '\u0003') {
+        cleanup();
+        output.write('\n');
+        process.exit(130);
+      }
+      // Enter / Ctrl-D — done.
+      if (c === '\n' || c === '\r' || c === '\u0004') {
+        cleanup();
+        output.write('\n');
+        resolve(buf);
         return;
       }
-      if (/[\n\r]/.test(s)) {
-        rl.output.write(s);
-      } else {
-        rl.output.write('\u2022'.repeat(s.length));
+      // Backspace (DEL or BS).
+      if (c === '\u007F' || c === '\b') {
+        if (buf.length > 0) {
+          buf = buf.slice(0, -1);
+          output.write('\b \b');
+        }
+        return;
       }
+      // Ignore other control chars.
+      if (c.length === 1 && c.charCodeAt(0) < 32) return;
+      buf += c;
+      output.write('\u2022');
     };
-    rl.question(prompt, (line) => {
-      rl._writeToOutput = original;
-      resolve(line);
-    });
+
+    input.on('data', onData);
   });
 }
 
