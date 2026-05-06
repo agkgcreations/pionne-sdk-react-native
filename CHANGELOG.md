@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.8 — 2026-05-06
+
+### Changed
+
+- `npx @pionne/react-native setup`: all wizard messages translated from
+  French to English to match the rest of the SDK output and the npm
+  ecosystem default. Functional behavior unchanged.
+
+### Added
+
+- After "Setup done.", the wizard now runs `eas env:list --environment
+  production` automatically so the user sees the variables actually live
+  on EAS without having to type the command. Read-only, values stay
+  masked thanks to `--visibility secret`.
+
 ## 0.5.7 — 2026-05-06
 
 ### Changed

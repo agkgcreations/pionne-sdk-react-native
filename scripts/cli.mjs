@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 //
-// CLI Pionne pour les devs qui utilisent @pionne/react-native.
-// Cross-platform (Node, pas Bash) — marche sur macOS, Linux, Windows.
+// Pionne CLI for @pionne/react-native users.
+// Cross-platform (Node, not Bash) — runs on macOS, Linux, Windows.
 //
 // Usage:
-//   npx @pionne/react-native setup              # wizard interactif
+//   npx @pionne/react-native setup              # interactive wizard
 //   npx @pionne/react-native upload-sourcemaps  # CI / EAS hook
 //   npx @pionne/react-native --help
 //
@@ -60,20 +60,20 @@ ${BOLD}${VIOLET}@pionne/react-native — CLI${RESET}
 
 Usage:
   ${BOLD}npx @pionne/react-native setup${RESET}
-      Wizard interactif. Login Pionne → choix du projet → configure les
-      EAS Secrets et écrit eas-build-on-success.sh dans ton repo. Une fois
-      fait, chaque \`eas build\` upload ses sourcemaps tout seul.
+      Interactive wizard. Pionne login → project picker → configures EAS
+      environment variables and writes eas-build-on-success.sh in your repo.
+      Each subsequent \`eas build\` then uploads its sourcemaps automatically.
 
   ${BOLD}npx @pionne/react-native upload-sourcemaps${RESET} [--platform ios|android]
-      Upload des sourcemaps en mode non-interactif. Lit PIONNE_AUTH_TOKEN,
-      PIONNE_PROJECT_ID, PIONNE_API depuis l'environnement (EAS Secrets en
-      CI, ou flags). Utilisé par eas-build-on-success.sh.
+      Non-interactive sourcemap upload. Reads PIONNE_AUTH_TOKEN,
+      PIONNE_PROJECT_ID, PIONNE_API from the environment (EAS env vars in CI,
+      or flags). Used by eas-build-on-success.sh.
 
-Variables d'environnement:
-  PIONNE_AUTH_TOKEN     Token Sanctum (eas env:create --visibility secret)
-  PIONNE_PROJECT_ID     ID du projet Pionne
-  PIONNE_API            Endpoint API (default: https://pionne.agkgcreations.fr/api)
-  EAS_BUILD_PLATFORM    Auto-fourni par EAS Build (ios|android)
+Environment variables:
+  PIONNE_AUTH_TOKEN     Sanctum token (eas env:create --visibility secret)
+  PIONNE_PROJECT_ID     Pionne project ID
+  PIONNE_API            API endpoint (default: https://pionne.agkgcreations.fr/api)
+  EAS_BUILD_PLATFORM    Auto-provided by EAS Build (ios|android)
 
 Docs: https://pionne.agkgcreations.fr/docs
 `);
@@ -88,21 +88,21 @@ async function setup() {
 
   const cwd = process.env.INIT_CWD || process.cwd();
   if (!existsSync(join(cwd, 'app.json')) && !existsSync(join(cwd, 'package.json'))) {
-    die(`Lance cette commande depuis la racine de ton projet Expo (où se trouve app.json).`);
+    die(`Run this command from the root of your Expo project (where app.json lives).`);
   }
 
   // 1. Vérifie eas-cli
   if (!hasCommand('eas')) {
-    warn(`eas-cli non installé. Run: npm install -g eas-cli`);
+    warn(`eas-cli not installed. Run: npm install -g eas-cli`);
     return;
   }
 
   let easUser;
   try {
     easUser = execSync('eas whoami', { stdio: 'pipe' }).toString().trim();
-    ok(`Loggé EAS: ${easUser}`);
+    ok(`Logged into EAS: ${easUser}`);
   } catch {
-    warn(`Tu n'es pas loggé EAS. Run: eas login`);
+    warn(`Not logged into EAS. Run: eas login`);
     return;
   }
 
@@ -110,11 +110,11 @@ async function setup() {
   const api = process.env.PIONNE_API || 'https://pionne.agkgcreations.fr/api';
   const rl = createInterface({ input, output });
 
-  const email = await rl.question(`Email Pionne: `);
+  const email = await rl.question(`Pionne email: `);
   // Hide stdin during password input.
-  const password = await readHidden(rl, `Mot de passe Pionne: `);
+  const password = await readHidden(rl, `Pionne password: `);
 
-  log(`${YELLOW}→ Login sur ${api}...${RESET}`);
+  log(`${YELLOW}→ Logging in to ${api}...${RESET}`);
   let loginRes;
   try {
     loginRes = await postJson(`${api}/auth/login`, { email, password });
@@ -124,9 +124,9 @@ async function setup() {
 
   // Two-factor auth — server asks for a TOTP code as a second step.
   if (loginRes?.requires_totp && loginRes.totp_token) {
-    log(`${GREEN}✓${RESET} Mot de passe OK — 2FA requise.`);
-    const totpInput = (await rl.question(`Code 2FA (6 chiffres) ou code de récupération: `)).trim();
-    if (!totpInput) die('Aucun code 2FA fourni.');
+    log(`${GREEN}✓${RESET} Password OK — 2FA required.`);
+    const totpInput = (await rl.question(`2FA code (6 digits) or recovery code: `)).trim();
+    if (!totpInput) die('No 2FA code provided.');
     const isRecovery = totpInput.includes('-') || totpInput.length > 6;
     try {
       loginRes = await postJson(`${api}/auth/login/totp`, {
@@ -140,45 +140,45 @@ async function setup() {
   }
 
   if (!loginRes?.token) {
-    die(`Login échoué: ${JSON.stringify(loginRes)}`);
+    die(`Login failed: ${JSON.stringify(loginRes)}`);
   }
   const authToken = loginRes.token;
   ok(`Login OK`);
 
   // 3. List projects
-  log(`${YELLOW}→ Récupération des projets...${RESET}`);
+  log(`${YELLOW}→ Fetching projects...${RESET}`);
   const { projects = [] } = await getJson(`${api}/projects`, authToken);
   if (!projects.length) {
-    die(`Aucun projet. Crée-en un dans l'app Pionne d'abord.`);
+    die(`No projects yet. Create one in the Pionne mobile app first.`);
   }
 
   let projectId;
   if (projects.length === 1) {
     projectId = projects[0].id;
-    ok(`Un seul projet, sélection auto: [id=${projectId}] ${projects[0].name}`);
+    ok(`Single project, auto-selected: [id=${projectId}] ${projects[0].name}`);
   } else {
     log('');
     projects.forEach((p, i) => {
       log(`  ${i + 1}) [id=${p.id}] ${p.name} (${p.platform})`);
     });
     log('');
-    const idx = await rl.question(`Numéro du projet: `);
+    const idx = await rl.question(`Project number: `);
     projectId = projects[parseInt(idx, 10) - 1]?.id;
-    if (!projectId) die(`Numéro invalide.`);
+    if (!projectId) die(`Invalid number.`);
   }
 
   // 4. Confirm + create EAS Secrets
   log(``);
-  log(`${BOLD}Configuration EAS Secrets:${RESET}`);
+  log(`${BOLD}EAS environment variables to set:${RESET}`);
   log(`  PIONNE_AUTH_TOKEN  = ${authToken.slice(0, 20)}...`);
   log(`  PIONNE_PROJECT_ID  = ${projectId}`);
   log(`  PIONNE_API         = ${api}`);
   log(``);
 
-  const confirm = await rl.question(`Confirmer (y/N)? `);
+  const confirm = await rl.question(`Confirm (y/N)? `);
   rl.close();
   if (confirm.toLowerCase() !== 'y') {
-    log(`Annulé.`);
+    log(`Cancelled.`);
     return;
   }
 
@@ -218,7 +218,7 @@ async function setup() {
         ],
         { stdio: 'inherit' },
       );
-      if (r.status !== 0) die(`eas env:create ${name} (${env}) a échoué`);
+      if (r.status !== 0) die(`eas env:create ${name} (${env}) failed`);
     }
   }
 
@@ -226,18 +226,24 @@ async function setup() {
   const hookPath = join(cwd, 'eas-build-on-success.sh');
   const hookContents = readPackageFile('templates/eas-build-on-success.sh');
   if (existsSync(hookPath)) {
-    warn(`eas-build-on-success.sh existe déjà — pas écrasé.`);
+    warn(`eas-build-on-success.sh already exists — not overwritten.`);
   } else {
     writeFileSync(hookPath, hookContents, { mode: 0o755 });
-    ok(`Hook EAS écrit: eas-build-on-success.sh`);
+    ok(`EAS hook written: eas-build-on-success.sh`);
   }
 
-  log(`\n${GREEN}${BOLD}✓ Setup terminé.${RESET}`);
-  log(`Désormais, chaque ${BOLD}eas build${RESET} uploadera ses sourcemaps tout seul.`);
+  log(`\n${GREEN}${BOLD}✓ Setup done.${RESET}`);
+  log(`From now on, every ${BOLD}eas build${RESET} will upload its sourcemaps automatically.`);
+
+  // Final verification — list the production env vars so the user sees them
+  // confirmed without having to type the command themselves. Read-only, the
+  // `secret` visibility ensures values stay masked.
+  log(`\n${YELLOW}→ Verifying — EAS env vars (production):${RESET}`);
+  spawnSync('eas', ['env:list', '--environment', 'production'], { stdio: 'inherit' });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// UPLOAD SOURCEMAPS (utilisé par le hook EAS)
+// UPLOAD SOURCEMAPS (used by the EAS build hook)
 // ─────────────────────────────────────────────────────────────────────────
 
 async function uploadSourcemaps() {
@@ -250,7 +256,7 @@ async function uploadSourcemaps() {
   let mapPath = args.map;
 
   if (!token || !projectId) {
-    log(`[Pionne] PIONNE_AUTH_TOKEN/PIONNE_PROJECT_ID absents — skip sourcemap upload.`);
+    log(`[Pionne] PIONNE_AUTH_TOKEN/PIONNE_PROJECT_ID missing — skipping sourcemap upload.`);
     return;
   }
   if (!platform) die(`--platform required (or EAS_BUILD_PLATFORM env)`);
