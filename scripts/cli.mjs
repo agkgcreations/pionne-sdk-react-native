@@ -124,11 +124,15 @@ async function setup() {
 
   // 2. Login Pionne
   const api = process.env.PIONNE_API || 'https://pionne.agkgcreations.fr/api';
-  const rl = createInterface({ input, output });
+  let rl = createInterface({ input, output });
 
   const email = await rl.question(_(`Pionne email: `, `Email Pionne : `));
-  // Hide stdin during password input.
-  const password = await readHidden(rl, _(`Pionne password: `, `Mot de passe Pionne : `));
+  // Fully close rl before the password prompt — sharing stdin between
+  // a paused readline and our raw-mode handler leaks the typed char on
+  // Node 22+/zsh. We re-open a fresh rl right after.
+  rl.close();
+  const password = await readHidden(_(`Pionne password: `, `Mot de passe Pionne : `));
+  rl = createInterface({ input, output });
 
   log(`${YELLOW}→ ${_(`Logging in to`, `Connexion à`)} ${api}...${RESET}`);
   let loginRes;
@@ -211,6 +215,12 @@ async function setup() {
   log(`  PIONNE_API         = ${api}`);
   log(``);
 
+  // Pre-check: app.json must already be linked to an EAS project (i.e. have
+  // `extra.eas.projectId`). Without it `eas env:*` fails with a generic
+  // "command failed" that leaves devs guessing. We catch the case here and
+  // tell them the exact `eas init` command to run.
+  ensureEasProjectLinked(cwd);
+
   // EAS migrated `eas secret:*` → `eas env:*` (env vars per environment).
   // We push to the three standard environments so the hook works whichever
   // build profile the user picks (development / preview / production).
@@ -226,7 +236,9 @@ async function setup() {
   // warn the user explicitly before overwriting. Silent fallback if eas-cli
   // doesn't support the listing format we expect (we just proceed).
   log(`${YELLOW}→ ${_('Checking existing EAS variables...', 'Vérification des variables EAS existantes...')}${RESET}`);
-  const existing = listExistingPionneVars(envs, varNames);
+  const existing = listExistingPionneVars(envs, varNames, (env, i, total) => {
+    log(`  ${GREY}[${i}/${total}] ${env}${RESET}`);
+  });
   if (existing.length === 0) {
     ok(_('No existing PIONNE_* variables — fresh install.', 'Aucune variable PIONNE_* existante — installation propre.'));
   } else {
@@ -244,9 +256,9 @@ async function setup() {
   }
   rl.close();
 
+  // Best-effort delete pass (silent — non-existent vars are fine).
   for (const env of envs) {
     for (const [name] of entries) {
-      // Best-effort delete — silent if it doesn't exist yet.
       spawnSync(
         'eas',
         ['env:delete', '--variable-name', name, '--variable-environment', env, '--non-interactive'],
@@ -255,8 +267,15 @@ async function setup() {
     }
   }
 
+  // Create pass — print progress for each var × env so the user sees the
+  // wizard is alive (eas env:create takes ~1-2s each, total ~15-20s for
+  // 9 entries × 3 envs).
+  log(`${YELLOW}→ ${_('Creating EAS variables (3 × 3 = 9 entries)...', 'Création des variables EAS (3 × 3 = 9 entrées)...')}${RESET}`);
+  let createIdx = 0;
+  const createTotal = envs.length * entries.length;
   for (const env of envs) {
     for (const [name, value] of entries) {
+      createIdx++;
       const r = spawnSync(
         'eas',
         [
@@ -268,9 +287,14 @@ async function setup() {
           '--non-interactive',
           '--force',
         ],
-        { stdio: 'inherit' },
+        { stdio: 'pipe', encoding: 'utf8' },
       );
-      if (r.status !== 0) die(`eas env:create ${name} (${env}) ${_(`failed`, `a échoué`)}`);
+      if (r.status !== 0) {
+        log(`  ${RED}✗${RESET} ${name} (${env})`);
+        if (r.stderr) output.write(r.stderr);
+        explainEasFailureAndDie(r.stderr ?? '', r.stdout ?? '', name, env);
+      }
+      log(`  ${GREEN}✓${RESET} [${createIdx}/${createTotal}] ${name} ${GREY}·${RESET} ${env}`);
     }
   }
 
@@ -386,9 +410,110 @@ function hasCommand(name) {
  * @param {string[]} names  - e.g. ['PIONNE_AUTH_TOKEN', ...]
  * @returns {Array<{env: string, names: string[]}>}
  */
-function listExistingPionneVars(envs, names) {
+/**
+ * Bail out with a precise, actionable message if the host project isn't
+ * linked to an EAS project yet (`extra.eas.projectId` missing in app.json).
+ *
+ * Without this guard, the wizard reaches `eas env:create` and dies on a
+ * generic "command failed" — devs then have no idea the real cause is
+ * "you never ran eas init". This helper surfaces the right next step.
+ */
+function ensureEasProjectLinked(cwd) {
+  const path = join(cwd, 'app.json');
+  if (!existsSync(path)) return; // bare RN — leave it to eas-cli to complain
+  let aj;
+  try {
+    aj = JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return; // unreadable JSON — skip the pre-check, eas-cli will fail anyway
+  }
+  const projectId = aj?.expo?.extra?.eas?.projectId;
+  if (typeof projectId === 'string' && projectId.length) return;
+
+  log('');
+  log(`${RED}${BOLD}✗ ${_(
+    'No EAS project linked to this app yet.',
+    "Aucun projet EAS n'est lié à cette app pour le moment."
+  )}${RESET}`);
+  log(_(
+    `Your ${BOLD}app.json${RESET} has no ${BOLD}expo.extra.eas.projectId${RESET}, so eas-cli has nothing to write env vars onto. This means you haven't created the project on Expo's side yet.`,
+    `Ton ${BOLD}app.json${RESET} n'a pas de ${BOLD}expo.extra.eas.projectId${RESET}, donc eas-cli n'a aucun projet sur lequel écrire les variables. Autrement dit, le projet n'existe pas encore côté Expo.`,
+  ));
+  log('');
+  log(`${BOLD}${_('Fix in 30 seconds:', 'À faire en 30 secondes :')}${RESET}`);
+  log(`  1) ${_('Sign in (free) at', 'Inscris-toi (gratuit) sur')} ${BOLD}https://expo.dev${RESET}`);
+  log(`  2) ${_('In this project run:', 'Dans ce projet, lance :')} ${BOLD}eas init${RESET}`);
+  log(`     ${GREY}${_('— picks an existing EAS project or creates a new one and writes the projectId into app.json', '— sélectionne un projet EAS existant ou en crée un nouveau, et écrit le projectId dans app.json')}${RESET}`);
+  log(`  3) ${_('Re-run', 'Relance')} ${BOLD}npx pionne setup${RESET}`);
+  log('');
+  process.exit(1);
+}
+
+/**
+ * Pretty-prints the most likely cause of an `eas env:create` failure based
+ * on patterns we've seen in the wild, then exits. Falls back to a generic
+ * message — the raw stderr was already streamed to the user above so they
+ * can still see the original eas-cli output.
+ */
+function explainEasFailureAndDie(stderr, stdout, name, env) {
+  const blob = `${stderr}\n${stdout}`.toLowerCase();
+
+  // No EAS project (most common) — covers several phrasings eas-cli has
+  // shipped over the last year. Same wording across all of them: "the
+  // project doesn't exist on Expo, run eas init".
+  if (
+    blob.includes('eas project') && (blob.includes('not configured') || blob.includes('not found') || blob.includes('not initialized'))
+    || blob.includes('projectid') && blob.includes('missing')
+    || blob.includes('run `eas init') || blob.includes('run "eas init') || blob.includes('run eas init')
+    || blob.includes('entity_not_authorized_error')
+    || blob.includes('could not find project')
+    || blob.includes('no project with id')
+  ) {
+    log('');
+    log(`${RED}${BOLD}✗ ${_(
+      'No EAS project on Expo for this app.',
+      "Ce projet n'existe pas sur Expo pour cette app."
+    )}${RESET}`);
+    log(_(
+      `eas-cli refused to write ${BOLD}${name}${RESET} because there's no EAS project to write it on. The project must first be created on ${BOLD}https://expo.dev${RESET} and linked to your local app.json.`,
+      `eas-cli a refusé d'écrire ${BOLD}${name}${RESET} parce qu'il n'y a aucun projet EAS sur lequel l'enregistrer. Il faut d'abord créer le projet sur ${BOLD}https://expo.dev${RESET} et le lier à ton app.json local.`,
+    ));
+    log('');
+    log(`${BOLD}${_('Fix:', 'À faire :')}${RESET}`);
+    log(`  1) eas login   ${GREY}${_('(if you aren\'t already)', '(si pas déjà fait)')}${RESET}`);
+    log(`  2) eas init    ${GREY}${_('— links / creates the EAS project and writes the projectId into app.json', '— lie / crée le projet EAS et écrit le projectId dans app.json')}${RESET}`);
+    log(`  3) ${_('Re-run', 'Relance')} ${BOLD}npx pionne setup${RESET}`);
+    process.exit(1);
+  }
+
+  // Auth issues — separate from "no project" because the fix differs.
+  if (blob.includes('not logged in') || blob.includes('eas login') || blob.includes('unauthenticated')) {
+    log('');
+    log(`${RED}${BOLD}✗ ${_('Not logged in to EAS.', 'Pas connecté à EAS.')}${RESET}`);
+    log(`${_('Run', 'Lance')} ${BOLD}eas login${RESET} ${_('then re-run', 'puis relance')} ${BOLD}npx pionne setup${RESET}.`);
+    process.exit(1);
+  }
+
+  // Quota / plan limits.
+  if (blob.includes('limit') && (blob.includes('exceeded') || blob.includes('reached'))) {
+    log('');
+    log(`${RED}${BOLD}✗ ${_('EAS quota reached on your Expo plan.', 'Quota EAS atteint sur ton plan Expo.')}${RESET}`);
+    log(_(
+      'Upgrade your plan on https://expo.dev or delete unused environment variables, then retry.',
+      'Upgrade ton plan sur https://expo.dev ou supprime des variables inutilisées, puis réessaie.',
+    ));
+    process.exit(1);
+  }
+
+  // Fallback — raw stderr was already streamed to stdout above.
+  die(`eas env:create ${name} (${env}) ${_('failed', 'a échoué')}`);
+}
+
+function listExistingPionneVars(envs, names, progress) {
   const found = [];
-  for (const env of envs) {
+  for (let i = 0; i < envs.length; i++) {
+    const env = envs[i];
+    if (progress) progress(env, i + 1, envs.length);
     const r = spawnSync(
       'eas',
       ['env:list', '--environment', env, '--format', 'short', '--non-interactive'],
@@ -396,8 +521,6 @@ function listExistingPionneVars(envs, names) {
     );
     if (r.status !== 0) continue;
     const out = String(r.stdout || '');
-    // Match each name as a whole word at the start of any line, the way
-    // `eas env:list --format short` prints them.
     const present = names.filter((n) => new RegExp(`(^|\\s)${n}(\\s|$)`, 'm').test(out));
     if (present.length) found.push({ env, names: present });
   }
@@ -422,7 +545,14 @@ async function fetchWithTimeout(url, opts = {}, timeoutMs = 15000) {
 async function postJson(url, body) {
   const res = await fetchWithTimeout(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      // Identify as the CLI client so the API names the issued Sanctum
+      // token 'cli' and revokes any prior CLI token for this user. Keeps
+      // the personal_access_tokens table tidy across repeated wizard runs.
+      'X-Pionne-Client': 'cli',
+    },
     body: JSON.stringify(body),
   });
   return res.json().catch(() => ({}));
@@ -435,46 +565,53 @@ async function getJson(url, token) {
   return res.json().catch(() => ({}));
 }
 
-async function readHidden(rl, prompt = '') {
-  // Pause readline so it stops handling stdin (and stops echoing). We take
-  // over the keystrokes ourselves in raw mode and resume readline at the end.
-  // This pattern is what npm CLI uses for password prompts and works across
-  // every Node version (readline.question + _writeToOutput is fragile from
-  // Node 22+, where TTY echo bypasses _writeToOutput).
-  rl.pause();
+async function readHidden(prompt = '') {
+  // Caller MUST have closed any active readline.Interface before calling
+  // this — sharing stdin between a paused rl and a raw-mode listener
+  // leaks the typed char on Node 22+/zsh.
+  // We force-disable TTY echo at the OS level (`stty -echo`) AND
+  // setRawMode(true). Both restored on cleanup.
   output.write(prompt);
 
   return new Promise((resolve) => {
     let buf = '';
     const isTTY = input.isTTY;
     const wasRaw = input.isRaw;
-    if (isTTY) input.setRawMode(true);
+    let sttyRestored = false;
+    const restoreEchoOS = () => {
+      if (sttyRestored) return;
+      sttyRestored = true;
+      try { execSync('stty echo 2>/dev/null'); } catch { /* non-POSIX shell, no-op */ }
+    };
+    if (isTTY) {
+      try { execSync('stty -echo 2>/dev/null'); } catch { /* fall back to setRawMode only */ }
+      input.setRawMode(true);
+    }
     input.resume();
     input.setEncoding('utf8');
 
     const cleanup = () => {
       input.removeListener('data', onData);
       if (isTTY) input.setRawMode(wasRaw);
-      // Resume readline for subsequent prompts.
-      rl.resume();
+      restoreEchoOS();
+      // Pause stdin so the next createInterface() reattaches cleanly
+      // without consuming a leftover keystroke.
+      input.pause();
     };
 
     const onData = (chunk) => {
       const c = chunk.toString();
-      // Ctrl-C — abort cleanly.
-      if (c === '\u0003') {
+      if (c === '\u0003') { // Ctrl-C
         cleanup();
         output.write('\n');
         process.exit(130);
       }
-      // Enter / Ctrl-D — done.
       if (c === '\n' || c === '\r' || c === '\u0004') {
         cleanup();
         output.write('\n');
         resolve(buf);
         return;
       }
-      // Backspace (DEL or BS).
       if (c === '\u007F' || c === '\b') {
         if (buf.length > 0) {
           buf = buf.slice(0, -1);
@@ -482,7 +619,6 @@ async function readHidden(rl, prompt = '') {
         }
         return;
       }
-      // Ignore other control chars.
       if (c.length === 1 && c.charCodeAt(0) < 32) return;
       buf += c;
       output.write('\u2022');

@@ -1,5 +1,136 @@
 # Changelog
 
+## 0.7.6 — 2026-05-08
+
+### Improved
+
+- **`pionne setup` now explains EAS errors clearly.** When `eas env:create`
+  fails because no EAS project is linked to the local app (`extra.eas.projectId`
+  missing in `app.json`), the wizard now stops *before* hitting eas-cli and
+  prints a fr/en message naming the real cause + the exact fix
+  (`eas init` → re-run setup). It also parses post-failure stderr to detect
+  three common cases — no EAS project, not logged in, plan quota reached —
+  and prints a tailored hint instead of the previous opaque
+  `eas env:create … failed`. Resolves the case where devs saw
+  `Error: env:create command failed.` with no clue that the underlying
+  reason was that the project didn't exist on Expo yet.
+
+## 0.7.5 — 2026-05-08
+
+### Added
+
+- **Geography context** (opt-in). New `sendGeography: true` option on
+  `init()` resolves the user's approximate city / region / country /
+  country_code via a free IP-based lookup (`https://ipapi.co/json/` by
+  default) and attaches it to every event as `contexts.geo`. No GPS, no
+  permission, no PII beyond what the IP already reveals. Resolved once
+  per process and cached. Customize via `sendGeography: { endpoint?, resolve? }`
+  to point at your own service or a server-side proxy.
+
+### Server-side change (no SDK action required)
+
+- **Per-token rate limit on ingest API** : the Pionne backend now caps
+  every public endpoint authenticated by `X-Pionne-Token` at **600 req/min
+  per token** (= 10 req/sec, shared between `/ingest`, `/sessions`,
+  `/feedback`). A leaked token can no longer drain your monthly quota
+  nor flood the infrastructure. Excess requests get `HTTP 429` with a
+  `Retry-After` header — the SDK fails silently in that case. Aligns
+  with the default client-side `maxEventsPerSecond: 10`. See
+  [Rate limits doc](https://pionne.agkgcreations.fr/security/rate-limits).
+
+## 0.7.4 — 2026-05-08
+
+### Fixed
+
+- `setup` wizard : password masking finally fixed for real on Node 22+/24
+  + macOS zsh. The 0.7.3 attempt (`stty -echo` + `setRawMode(true)`)
+  still leaked the typed char because **the parent `readline.Interface`
+  remained attached to stdin** (just paused) and re-echoed under the
+  hood. Solution : fully `rl.close()` BEFORE the password prompt and
+  re-create a fresh interface AFTER. Now stdin is exclusively owned by
+  our raw-mode handler during the password input — only `••••••` is
+  emitted, never the actual character.
+
+## 0.7.3 — 2026-05-08
+
+### Fixed
+
+- `setup` wizard : password masking ré-régressait sous Node 22+/24 sur
+  macOS zsh quand une `readline.Interface` avait déjà été active dans le
+  process. `setRawMode(true)` seul ne suffit pas dans ce cas — l'OS
+  continuait à echo le caractère APRÈS notre `•`, donnant un affichage
+  entrelacé `@•A•n•d•...`. Fix : on combine `setRawMode(true)` avec
+  `stty -echo` (POSIX shell) qui désactive l'écho au niveau OS, et on
+  restaure les deux à la sortie. Plus aucun caractère du mot de passe
+  n'apparaît visuellement.
+
+## 0.7.2 — 2026-05-08
+
+### Security
+
+- **HTTPS-only endpoint enforcement.** `init()` refuse maintenant un
+  endpoint non-HTTPS en production (sauf `localhost`/`*.local`). Évite
+  toute fuite en clair d'un payload de crash qui contiendrait par
+  inadvertance des données sensibles.
+- **Token validation renforcée.** Doit faire ≥ 16 caractères après le
+  préfixe `pio_live_`, et rejette les placeholders dev (`xxx`, `todo`,
+  `changeme`...).
+- **Rate limit côté client.** Token-bucket de 10 events/sec par défaut
+  (option `maxEventsPerSecond`). Drop silencieux au-delà — protège la
+  host d'un runaway loop et plafonne l'impact sur ton quota Pionne.
+- **`init()` enveloppé dans un try/catch** : un bug dans le SDK ne crash
+  jamais l'app hôte, juste un warning en dev.
+
+## 0.7.1 — 2026-05-07
+
+### Changed
+
+- `setup` wizard now sends `X-Pionne-Client: cli` on `/auth/login` so the
+  Pionne API names the issued Sanctum token `cli` and revokes any prior
+  CLI token for the same user. Keeps the `personal_access_tokens` table
+  tidy across repeated wizard runs and limits blast radius if a CLI
+  token leaks.
+
+## 0.7.0 — 2026-05-07
+
+### Added
+
+- **Release Health.** `Pionne.init()` now opens a release session at boot
+  (`status='ok'`) and auto-flips it to `crashed`/`errored` whenever the
+  global error handler or promise rejection handler sees an uncaught
+  fatal/error. The dashboard derives the crash-free user rate per release
+  from these sessions. Disable with `releaseHealth: false`.
+  - New API: `Pionne.endSession()`, `Pionne.getSessionId()`.
+  - New endpoint hit: `POST /api/sessions` (idempotent on `session_id`).
+- **User Feedback.** New `<PionneFeedbackModal>` component you mount once
+  near your root, plus three programmatic APIs:
+  - `Pionne.showFeedback({ eventId? })` — opens the modal
+  - `Pionne.captureFeedback({ message, name?, email?, eventId? })` — sends
+    a payload directly without UI
+  - `Pionne.getFeedbackContext()` — returns the wired-up `{endpoint, token}`
+    so power users can roll their own UI
+  - New endpoints hit: `POST /api/events/{id}/feedback` and
+    `POST /api/feedback`.
+
+## 0.6.2 — 2026-05-07
+
+### Fixed
+
+- `npx @pionne/react-native setup`: password input was leaking keystrokes
+  on Node 22+ (the `_writeToOutput` override was bypassed by TTY echo,
+  showing characters interleaved with bullets — `@•A•n•d•a•m•...`).
+  Switched to a standalone raw-mode reader (`setRawMode(true)` + manual
+  `data` listener) that pauses the parent readline interface and takes
+  direct control of stdin. Verified on Node 18, 20, 22, 24.
+
+### Added
+
+- Progress feedback during the EAS variable provisioning. The wizard now
+  prints `[i/3] <env>` while pre-checking each environment, and
+  `[i/9] PIONNE_X · <env>` after each successful `eas env:create`. This
+  removes the 15-20 s silent gap that previously made the wizard look
+  frozen — users were quitting because they thought it had crashed.
+
 ## 0.6.1 — 2026-05-06
 
 ### Added

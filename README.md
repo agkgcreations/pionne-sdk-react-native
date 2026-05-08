@@ -177,6 +177,9 @@ npx @pionne/react-native --help
 | `appId` | auto | Bundle ID (anti-token-theft) |
 | `beforeSend` | — | Hook avant envoi (return null = drop) |
 | `maxStackFrames` | `50` | Frames sent par event |
+| `maxEventsPerSecond` | `10` | Token-bucket client. Au-delà, drop silencieux. `0` pour désactiver (déconseillé). Le serveur cap aussi à 600 req/min/token, indépendant. |
+| `releaseHealth` | `true` | Open une session à `init()` pour calculer le crash-free user rate. |
+| `sendGeography` | `false` | Opt-in : attache `contexts.geo` (city/region/country) résolu IP-side. |
 
 ## Pricing
 

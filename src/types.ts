@@ -105,6 +105,19 @@ export interface SdkContext {
   version: string;
 }
 
+/**
+ * Approximate user geography, opt-in via `sendGeography: true`.
+ * Resolved IP-side (no GPS, no permission). Best-effort; may be `{}` if
+ * the SDK couldn't reach the lookup service or if VPN/CDN strips it.
+ */
+export interface GeoContext {
+  city?: string;
+  region?: string;
+  country?: string;
+  /** ISO 3166-1 alpha-2 (e.g. "FR", "US"). */
+  country_code?: string;
+}
+
 export interface PionneContexts {
   os?: OsContext;
   device?: DeviceContext;
@@ -113,6 +126,7 @@ export interface PionneContexts {
   runtime?: RuntimeContext;
   expo_constants?: ExpoConstantsContext;
   sdk?: SdkContext;
+  geo?: GeoContext;
 }
 
 // =====================================================================
@@ -225,4 +239,28 @@ export interface PionneOptions {
   captureScreenshot?: boolean;
   /** Quality JPEG (0..1) pour le screenshot. Default: 0.5. */
   screenshotQuality?: number;
+  /**
+   * Release Health — opens a session at init() with status='ok' and flips
+   * it to 'crashed'/'errored' if a fatal/uncaught error fires. The
+   * dashboard derives crash-free user rate per release from these.
+   * Default: true. Set to false to disable session tracking entirely.
+   */
+  releaseHealth?: boolean;
+  /**
+   * Maximum events sent per second (token bucket). Anything beyond is
+   * silently dropped. Protects the host from a runaway error loop AND
+   * caps the worst-case impact on your monthly Pionne quota.
+   * Default: 10. Set to 0 to disable the limit entirely (not
+   * recommended in production).
+   */
+  maxEventsPerSecond?: number;
+  /**
+   * Approximate user geography (city / region / country / country_code),
+   * resolved IP-side via a free public service. Attached to every event
+   * as `contexts.geo`. **Opt-in** — disabled by default for privacy.
+   *  - `true`: enable with default service (`https://ipapi.co/json/`)
+   *  - object: customize the endpoint or supply your own resolver
+   * Default: `false`.
+   */
+  sendGeography?: boolean | { endpoint?: string; resolve?: () => Promise<GeoContext | null> };
 }

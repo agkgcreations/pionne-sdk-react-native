@@ -7,8 +7,23 @@ import {
 } from './breadcrumbs';
 import { gatherStaticContext } from './context';
 import { PionneErrorBoundary } from './error-boundary';
+import { fetchGeo, getGeo } from './geo';
+import {
+  type FeedbackContext,
+  type FeedbackPayload,
+  emitShowFeedback,
+  sendFeedback as _sendFeedback,
+} from './feedback';
+import { PionneFeedbackModal } from './feedback-modal';
 import { captureScreenshot, setRootRef as _setRootRef } from './screenshot';
 import { DEFAULT_PATTERNS, scrubDeep, type ScrubPattern } from './scrubber';
+import { RateLimiter, validateEndpoint, validateToken } from './security';
+import {
+  endSession as _endSession,
+  flipFromEvent,
+  getCurrentSessionId,
+  startSession as _startSession,
+} from './sessions';
 import { wrapTimers } from './timers';
 import type {
   Level,
@@ -18,8 +33,8 @@ import type {
   PionneOptions,
 } from './types';
 
-export { PionneErrorBoundary };
-export type { Breadcrumb };
+export { PionneErrorBoundary, PionneFeedbackModal };
+export type { Breadcrumb, FeedbackPayload };
 
 export type {
   Level,
@@ -42,6 +57,9 @@ type ResolvedConfig = Required<
     | 'appId'
     | 'scrubPii'
     | 'breadcrumbs'
+    | 'releaseHealth'
+    | 'maxEventsPerSecond'
+    | 'sendGeography'
   >
 > & {
   beforeSend?: PionneOptions['beforeSend'];
@@ -56,6 +74,8 @@ type ResolvedConfig = Required<
 let config: ResolvedConfig | null = null;
 let staticContext: Partial<PionneEvent> = {};
 let originalErrorHandler: ((err: Error, isFatal?: boolean) => void) | null = null;
+let rateLimiter: RateLimiter | null = null;
+let droppedByRateLimit = 0;
 
 function isDev(): boolean {
   return typeof __DEV__ !== 'undefined' && __DEV__ === true;
@@ -97,6 +117,14 @@ function buildEvent(
     ...extra,
   };
 
+  // Geo context (opt-in via sendGeography). Best-effort: if the lookup
+  // hasn't returned yet on the very first event, we just skip it — it'll
+  // be attached on subsequent events for the rest of the session.
+  const geo = getGeo();
+  if (geo && Object.keys(geo).length) {
+    event.contexts = { ...(event.contexts ?? {}), geo };
+  }
+
   // Attache les N derniers breadcrumbs.
   const crumbs = getBreadcrumbs();
   if (crumbs.length) {
@@ -119,6 +147,18 @@ function buildEvent(
 
 function send(event: PionneEvent): void {
   if (!config) return;
+  // Client-side rate limit — drops events beyond maxEventsPerSecond to
+  // protect the host from a runaway loop and the user from blowing
+  // through their monthly quota. We log the drop count once per minute
+  // in dev so the user notices the cap kicking in.
+  if (rateLimiter && !rateLimiter.allow()) {
+    droppedByRateLimit++;
+    if (isDev() && droppedByRateLimit % 50 === 1) {
+      // eslint-disable-next-line no-console
+      console.warn(`[Pionne] rate-limit reached (${droppedByRateLimit} events dropped). Bump maxEventsPerSecond if intentional.`);
+    }
+    return;
+  }
   // Si captureScreenshot activé, on l'attache de manière async juste avant
   // l'envoi. La signature publique reste sync (fire-and-forget).
   if (config.captureScreenshot) {
@@ -136,6 +176,11 @@ function send(event: PionneEvent): void {
   doSend(event);
 }
 
+// Track 4xx rejections that indicate a permanent misconfig (bundle/token).
+// We log loudly the first time *even in prod* so devs notice in TestFlight,
+// then stay silent to not spam.
+let warnedPermFailure = false;
+
 function doSend(event: PionneEvent): void {
   if (!config) return;
   if (isDev()) {
@@ -151,10 +196,26 @@ function doSend(event: PionneEvent): void {
     },
     body: JSON.stringify(event),
   })
-    .then((res) => {
+    .then(async (res) => {
       if (isDev()) {
         // eslint-disable-next-line no-console
         console.log('[Pionne] response', res.status);
+      }
+      // 401/403 = config problem (token invalide / bundle mismatch). 422 =
+      // validation. Toutes ces erreurs ne se résoudront jamais en retry — on
+      // les surface au moins une fois pour que le dev les voie en TestFlight.
+      if (!res.ok && (res.status === 401 || res.status === 403 || res.status === 422)) {
+        if (!warnedPermFailure) {
+          warnedPermFailure = true;
+          let body = '';
+          try { body = await res.text(); } catch { /* ignore */ }
+          // eslint-disable-next-line no-console
+          console.warn(
+            '[Pionne] event rejected (permanent) — status=' + res.status +
+            ' body=' + body.slice(0, 200) +
+            '. Subsequent rejections will be silent. Check token + project bundle_id.',
+          );
+        }
       }
     })
     .catch((e) => {
@@ -178,7 +239,10 @@ function installGlobalErrorHandler(): void {
   originalErrorHandler = eu.getGlobalHandler();
   eu.setGlobalHandler((err, isFatal) => {
     const event = buildEvent(err, isFatal ? 'fatal' : 'error', 'onerror', false);
-    if (event) send(event);
+    if (event) {
+      send(event);
+      flipFromEvent(event);
+    }
     originalErrorHandler?.(err, isFatal);
   });
 }
@@ -199,7 +263,10 @@ function installPromiseRejectionHandler(): void {
       allRejections: true,
       onUnhandled: (_id, reason) => {
         const event = buildEvent(reason, 'error', 'onunhandledrejection', false);
-        if (event) send(event);
+        if (event) {
+          send(event);
+          flipFromEvent(event);
+        }
       },
     });
   }
@@ -212,13 +279,27 @@ export const Pionne = {
    * Initialise the SDK. Call this once, as early as possible (App.tsx top-level).
    */
   init(options: PionneOptions): void {
-    if (!options?.token || !options.token.startsWith('pio_live_')) {
-      // Don't throw — we never want to crash the host. Log loudly in dev only.
-      if (isDev()) {
-        console.warn('[Pionne] Missing or invalid token (must start with pio_live_).');
+    // Defensive try/catch around the whole init — a monitoring SDK must
+    // NEVER crash the host. Any unexpected throw here is swallowed with a
+    // dev-only warning; the host app keeps booting.
+    try {
+      if (!options?.token || !validateToken(options.token)) {
+        if (isDev()) {
+          console.warn('[Pionne] Missing or invalid token (expected pio_live_<≥16 chars>, no placeholders).');
+        }
+        return;
       }
-      return;
-    }
+      const endpoint = options.endpoint ?? DEFAULT_ENDPOINT;
+      if (!validateEndpoint(endpoint, isDev())) {
+        if (isDev()) {
+          console.warn('[Pionne] Refusing non-HTTPS endpoint in production:', endpoint);
+        }
+        return;
+      }
+      // Token-bucket rate limiter — caps runaway error loops at
+      // maxEventsPerSecond (default 10). Set to 0 to disable.
+      const rps = options.maxEventsPerSecond ?? 10;
+      rateLimiter = rps > 0 ? new RateLimiter(rps, rps) : null;
 
     const autoContext = options.autoContext ?? true;
     staticContext = autoContext ? gatherStaticContext() : {};
@@ -257,10 +338,39 @@ export const Pionne = {
       // ErrorUtils.setGlobalHandler is bypassed by HMR or Hermes-in-dev.
       wrapTimers((err) => {
         const event = buildEvent(err, 'error', 'onerror', false);
-        if (event) send(event);
+        if (event) {
+          send(event);
+          flipFromEvent(event);
+        }
       });
     }
     if (config.captureUnhandledRejections) installPromiseRejectionHandler();
+
+    // Release Health — open a session unless the host opted out. We send
+    // status='ok' immediately and rely on flipFromEvent() to upgrade to
+    // 'crashed'/'errored' if a fatal hits.
+    if (options.releaseHealth !== false) {
+      _startSession({
+        endpoint: config.endpoint,
+        token: config.token,
+        release: config.release,
+        environment: config.environment,
+        appVersion: staticContext.app_version,
+        osName: staticContext.os_name,
+        userIdAnon: config.userIdAnon,
+        appId: config.appId,
+      });
+    }
+
+    // Geography lookup (opt-in). Fire-and-forget — the result is cached
+    // for the rest of the session and attached to every event via
+    // contexts.geo. Failures are silent (no retry), so a flaky lookup
+    // never costs more than ~4s of background fetch on init.
+    if (options.sendGeography) {
+      const geoCfg =
+        typeof options.sendGeography === 'object' ? options.sendGeography : undefined;
+      void fetchGeo(geoCfg);
+    }
 
     // Auto-instrumentation breadcrumbs.
     const bc =
@@ -285,6 +395,15 @@ export const Pionne = {
         '·',
         'release=' + (config.release ?? '—'),
       );
+    }
+    } catch (e) {
+      // Defensive — a monitoring SDK that crashes the host is worse than
+      // no monitoring at all. Swallow + warn in dev only.
+      if (isDev()) {
+        // eslint-disable-next-line no-console
+        console.warn('[Pionne] init failed silently — monitoring disabled.', e);
+      }
+      config = null;
     }
   },
 
@@ -372,5 +491,51 @@ export const Pionne = {
         throw err;
       }
     }) as F;
+  },
+
+  // ─── Release Health ───────────────────────────────────────────────────
+
+  /** Manually end the current session (status='exited'). Most apps don't
+   *  need this — `init()` opens a session automatically. */
+  endSession(): void {
+    _endSession();
+  },
+
+  /** UUID of the current open session (for diagnostics). */
+  getSessionId(): string | null {
+    return getCurrentSessionId();
+  },
+
+  // ─── User Feedback ────────────────────────────────────────────────────
+
+  /** Pop the <PionneFeedbackModal/> mounted in the host tree. Optionally
+   *  attach the feedback to a specific event ID. */
+  showFeedback(opts?: { eventId?: number | string; defaults?: Partial<FeedbackPayload> }): void {
+    emitShowFeedback(opts ?? {});
+  },
+
+  /** Send a feedback payload directly without showing the Modal. Useful
+   *  for power users with a custom UI. */
+  async captureFeedback(payload: FeedbackPayload): Promise<{ ok: boolean; status: number }> {
+    if (!config) return { ok: false, status: 0 };
+    return _sendFeedback(
+      {
+        endpoint: config.endpoint,
+        token: config.token,
+        appVersion: staticContext.app_version,
+      },
+      payload,
+    );
+  },
+
+  /** Internal — for the <PionneFeedbackModal/> to know which token/endpoint
+   *  to use. Returns null if init() has not run yet. */
+  getFeedbackContext(): FeedbackContext | null {
+    if (!config) return null;
+    return {
+      endpoint: config.endpoint,
+      token: config.token,
+      appVersion: staticContext.app_version,
+    };
   },
 };
