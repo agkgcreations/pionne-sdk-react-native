@@ -14,6 +14,7 @@ import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { execSync, spawnSync } from 'node:child_process';
 import { stdin as input, stdout as output } from 'node:process';
+import { gzipSync } from 'node:zlib';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -367,15 +368,23 @@ async function uploadSourcemaps() {
   log(`→ Upload ${mapPath}`);
   log(`  release=${release} platform=${platform} project=${projectId} bytes=${bytes}`);
 
-  // Upload multipart via fetch (Node 18+).
+  // gzip systématique avant upload : les sourcemaps RN/Metro sont du JSON
+  // très répétitif, gzip les ramène typiquement à ~10-15 % de leur taille.
+  // Indispensable pour les hébergeurs avec LimitRequestBody bas
+  // (ex: O2switch ~10 MB par défaut). Le serveur Pionne détecte le suffix
+  // `.gz` (ou les magic bytes 1f 8b) et stocke/décode en conséquence.
+  // Sans coût significatif côté CLI : gzipSync sur 20 MB prend < 200 ms.
   const formData = new FormData();
   formData.append('release', release);
   formData.append('platform', platform);
   const fileBuffer = readFileSync(mapPath);
+  const gzipped = gzipSync(fileBuffer, { level: 9 });
+  log(`  compressed: ${gzipped.length} bytes (${Math.round(gzipped.length / fileBuffer.length * 100)}% of original)`);
+  const baseName = mapPath.split('/').pop();
   formData.append(
     'file',
-    new Blob([fileBuffer]),
-    mapPath.split('/').pop(),
+    new Blob([gzipped]),
+    `${baseName}.gz`,
   );
 
   const res = await fetch(`${api}/projects/${projectId}/sourcemaps`, {
