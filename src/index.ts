@@ -154,8 +154,17 @@ function buildEvent(
   return event;
 }
 
-function send(event: PionneEvent): void {
-  if (!config) return;
+/**
+ * Posts an event to /api/ingest. Returns a Promise<boolean> that resolves
+ * to true only when the server accepted the event (HTTP 2xx). False on
+ * network error, 4xx (token/bundle/validation), 5xx, or rate-limit drop.
+ *
+ * The boolean lets callers decide whether to flip a release session to
+ * 'errored'/'crashed' — a session marked crashed when the event itself
+ * was rejected gives a confusing "1 crash · 0 events" in the dashboard.
+ */
+function send(event: PionneEvent): Promise<boolean> {
+  if (!config) return Promise.resolve(false);
   // Client-side rate limit — drops events beyond maxEventsPerSecond to
   // protect the host from a runaway loop and the user from blowing
   // through their monthly quota. We log the drop count once per minute
@@ -166,23 +175,38 @@ function send(event: PionneEvent): void {
       // eslint-disable-next-line no-console
       console.warn(`[Pionne] rate-limit reached (${droppedByRateLimit} events dropped). Bump maxEventsPerSecond if intentional.`);
     }
-    return;
+    return Promise.resolve(false);
   }
   // Si captureScreenshot activé, on l'attache de manière async juste avant
-  // l'envoi. La signature publique reste sync (fire-and-forget).
+  // l'envoi.
   if (config.captureScreenshot) {
-    void (async () => {
+    return (async () => {
       try {
         const dataUri = await captureScreenshot(config!.screenshotQuality);
         if (dataUri) event = { ...event, screenshot: dataUri };
       } catch {
         // best-effort
       }
-      doSend(event);
+      return doSend(event);
     })();
-    return;
   }
-  doSend(event);
+  return doSend(event);
+}
+
+/**
+ * Schedules `send(event)` and flips the release session only if the
+ * event was actually persisted server-side. Use this everywhere a flip
+ * was previously paired with a fire-and-forget send. Avoids the
+ * "session marked crashed without an event" false positive that
+ * happens on bundle_id mismatches or transient network errors.
+ *
+ * Returns void — the caller doesn't need to await; the chain runs in
+ * the background. The host app keeps going either way.
+ */
+function sendThenFlip(event: PionneEvent): void {
+  void send(event).then((ok) => {
+    if (ok) flipFromEvent(event);
+  });
 }
 
 // Track 4xx rejections that indicate a permanent misconfig (bundle/token).
@@ -190,14 +214,14 @@ function send(event: PionneEvent): void {
 // then stay silent to not spam.
 let warnedPermFailure = false;
 
-function doSend(event: PionneEvent): void {
-  if (!config) return;
+function doSend(event: PionneEvent): Promise<boolean> {
+  if (!config) return Promise.resolve(false);
   if (isDev()) {
     // eslint-disable-next-line no-console
     console.log('[Pionne] sending', event.exception_type, '→', config.endpoint);
   }
   // fetch is part of the React Native global polyfill, so no import needed.
-  fetch(config.endpoint, {
+  return fetch(config.endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -226,12 +250,14 @@ function doSend(event: PionneEvent): void {
           );
         }
       }
+      return res.ok;
     })
     .catch((e) => {
       if (isDev()) {
         // eslint-disable-next-line no-console
         console.warn('[Pionne] send failed', e);
       }
+      return false;
     });
 }
 
@@ -248,10 +274,7 @@ function installGlobalErrorHandler(): void {
   originalErrorHandler = eu.getGlobalHandler();
   eu.setGlobalHandler((err, isFatal) => {
     const event = buildEvent(err, isFatal ? 'fatal' : 'error', 'onerror', false);
-    if (event) {
-      send(event);
-      flipFromEvent(event);
-    }
+    if (event) sendThenFlip(event);
     originalErrorHandler?.(err, isFatal);
   });
 }
@@ -272,10 +295,7 @@ function installPromiseRejectionHandler(): void {
       allRejections: true,
       onUnhandled: (_id, reason) => {
         const event = buildEvent(reason, 'error', 'onunhandledrejection', false);
-        if (event) {
-          send(event);
-          flipFromEvent(event);
-        }
+        if (event) sendThenFlip(event);
       },
     });
   }
@@ -347,10 +367,7 @@ export const Pionne = {
       // ErrorUtils.setGlobalHandler is bypassed by HMR or Hermes-in-dev.
       wrapTimers((err) => {
         const event = buildEvent(err, 'error', 'onerror', false);
-        if (event) {
-          send(event);
-          flipFromEvent(event);
-        }
+        if (event) sendThenFlip(event);
       });
     }
     if (config.captureUnhandledRejections) installPromiseRejectionHandler();
@@ -432,7 +449,10 @@ export const Pionne = {
    */
   captureException(err: unknown, extra?: Partial<PionneEvent>): void {
     const event = buildEvent(err, extra?.level ?? 'error', 'manual', true, extra);
-    if (event) send(event);
+    // No flipFromEvent on manual captures: the dev chose to record this
+    // event explicitly (e.g. caught + handled). Sentry parity — manual
+    // capture doesn't affect session health.
+    if (event) void send(event);
   },
 
   /**
@@ -446,7 +466,7 @@ export const Pionne = {
       true,
       { exception_type: 'Message', ...extra },
     );
-    if (event) send(event);
+    if (event) void send(event);
   },
 
   /**

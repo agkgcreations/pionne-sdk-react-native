@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.4 — 2026-05-09
+
+### Fixed
+
+- **Release Health no longer reports phantom crashes.** Previously, when
+  the global error handler caught an uncaught exception, it called
+  `send(event)` and `flipFromEvent(event)` back-to-back. `send` is
+  fire-and-forget — if the POST `/api/ingest` was rejected (bundle ID
+  mismatch, token revoked, network error, validation), the session was
+  still flipped to `crashed`/`errored` server-side. Result: the
+  dashboard showed "1 crash · 2 errors" on a release, but the Issues
+  tab was empty because no event was ever persisted.
+  The fix turns `send` into `Promise<boolean>` and only flips the
+  session if the event actually landed (HTTP 2xx). Manual captures
+  (`captureException`, `captureMessage`) still don't touch session
+  health (Sentry parity). On bundle mismatch, the dev still sees the
+  "[Pionne] event rejected (permanent)" warning so they can fix the
+  config — they just no longer get a misleading session marker.
+
 ## 0.8.1 — 2026-05-09
 
 ### Documentation
