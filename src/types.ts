@@ -189,6 +189,21 @@ export interface PionneOptions {
   environment?: string;
   /** Disable all reporting if false. Default: true. */
   enabled?: boolean;
+  /**
+   * Whether to send events when the app runs in `__DEV__` (Metro / Expo
+   * Go / dev build). Default: `true` for backwards compatibility.
+   *
+   * Pass `false` to silence the SDK in dev — useful to avoid polluting
+   * the production dashboard with noise from local debugging, and to
+   * sidestep bundle ID mismatches between Expo Go (`host.exp.Exponent`)
+   * and the bundle ID pinned on your project. Mirrors Sentry's
+   * `enableInExpoDevelopment` / `debug` philosophy.
+   *
+   * When false in `__DEV__`, `init()` is a no-op (no global handlers
+   * installed, no session opened, no geo lookup). All `Pionne.captureXxx`
+   * calls also no-op silently.
+   */
+  enableInDev?: boolean;
   /** Auto-capture uncaught JS exceptions via ErrorUtils. Default: true. */
   captureUncaughtErrors?: boolean;
   /** Auto-capture unhandled promise rejections. Default: true. */

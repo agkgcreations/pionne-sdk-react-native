@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.8.5 — 2026-05-09
+
+### Added
+
+- **`enableInDev?: boolean` option.** Default `true` (backward compat).
+  Pass `false` to make `Pionne.init()` no-op when the host runs under
+  `__DEV__` (Metro / Expo Go / dev build). Avoids polluting your prod
+  dashboard with debug noise and dodges the bundle ID mismatch
+  headache between Expo Go's `host.exp.Exponent` and the bundle pinned
+  on your project.
+
+  ```ts
+  Pionne.init({
+    token: 'pio_live_…',
+    enableInDev: false, // silence everything in __DEV__
+  });
+  ```
+
+  When skipped, no global handlers are installed, no session opens, no
+  geo lookup runs. All `Pionne.captureXxx()` calls also no-op silently
+  for the lifetime of the process. A single `console.info` is emitted
+  on init so you know the SDK is intentionally dormant.
+
 ## 0.8.4 — 2026-05-09
 
 ### Fixed

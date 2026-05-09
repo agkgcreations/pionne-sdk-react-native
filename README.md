@@ -42,6 +42,19 @@ Pionne est mobile-first : tu génères et tu visualises tes erreurs **depuis l'a
 
 ⚠️ Le token n'est affiché **qu'une seule fois** à la création — stocke-le dans une variable d'environnement (`EXPO_PUBLIC_PIONNE_TOKEN`) ou directement dans `app.json` → `extra.pionneToken`.
 
+## Skip the SDK in dev
+
+Pour ne pas polluer ton dashboard prod avec les events que tu génères en Metro / Expo Go (et éviter le casse-tête du bundle ID mismatch), passe `enableInDev: false` :
+
+```ts
+Pionne.init({
+  token: 'pio_live_…',
+  enableInDev: false, // no-op in __DEV__
+});
+```
+
+En `__DEV__`, l'init log `[Pionne] Skipped in __DEV__ (enableInDev=false)` et toutes les méthodes (`captureException`, `captureMessage`, `setUser`, etc.) deviennent silencieuses pour la durée du process. Aucun handler global n'est installé, aucune session n'est ouverte. Comportement par défaut : `enableInDev: true` (rétrocompat).
+
 ## Quickstart
 
 ```ts
@@ -199,6 +212,7 @@ API complète :
 | `release` | auto (`expo.version`) | App release pour grouper les régressions |
 | `environment` | `__DEV__ ? 'development' : 'production'` | label environnement |
 | `enabled` | `true` | Toggle reporting |
+| `enableInDev` | `true` | Set to `false` to make `init()` no-op in `__DEV__`. Recommandé pour ne pas polluer le dashboard prod avec des events Expo Go / Metro. |
 | `captureUncaughtErrors` | `true` | ErrorUtils + timer wrapping |
 | `captureUnhandledRejections` | `true` | Hermes rejection tracker |
 | `breadcrumbs` | `true` | Auto-instrument console + fetch |

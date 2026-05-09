@@ -69,6 +69,9 @@ type ResolvedConfig = Required<
     | 'releaseHealth'
     | 'maxEventsPerSecond'
     | 'sendGeography'
+    // enableInDev is an init-time-only flag; once init() decides to
+    // proceed, it doesn't live on the runtime config.
+    | 'enableInDev'
   >
 > & {
   beforeSend?: PionneOptions['beforeSend'];
@@ -312,6 +315,15 @@ export const Pionne = {
     // NEVER crash the host. Any unexpected throw here is swallowed with a
     // dev-only warning; the host app keeps booting.
     try {
+      // Opt-out: skip the SDK entirely in __DEV__ when the host asked
+      // for it. Avoids polluting the prod dashboard with dev events
+      // and dodges the bundle ID mismatch headache between Expo Go
+      // and the bundle pinned on the project.
+      if (isDev() && options?.enableInDev === false) {
+        console.info('[Pionne] Skipped in __DEV__ (enableInDev=false). Will activate in production.');
+        return;
+      }
+
       if (!options?.token || !validateToken(options.token)) {
         if (isDev()) {
           console.warn('[Pionne] Missing or invalid token (expected pio_live_<≥16 chars>, no placeholders).');
@@ -376,10 +388,10 @@ export const Pionne = {
     // can ship samples without the dev passing them again. The actual
     // sampler stays idle until startProfile() is called.
     configureProfiler({
-      endpoint: config.endpoint,
-      token: config.token,
-      release: config.release,
-      environment: config.environment,
+      endpoint: config!.endpoint,
+      token: config!.token,
+      release: config!.release,
+      environment: config!.environment,
       appVersion: staticContext.app_version,
     });
 
@@ -387,15 +399,18 @@ export const Pionne = {
     // status='ok' immediately and rely on flipFromEvent() to upgrade to
     // 'crashed'/'errored' if a fatal hits.
     if (options.releaseHealth !== false) {
+      // TS loses the non-null narrowing on `config` across the inline
+      // closures above (fetchGeo, etc.). We just assigned it 30 lines
+      // up, so the `!` is safe here and below.
       _startSession({
-        endpoint: config.endpoint,
-        token: config.token,
-        release: config.release,
-        environment: config.environment,
+        endpoint: config!.endpoint,
+        token: config!.token,
+        release: config!.release,
+        environment: config!.environment,
         appVersion: staticContext.app_version,
         osName: staticContext.os_name,
-        userIdAnon: config.userIdAnon,
-        appId: config.appId,
+        userIdAnon: config!.userIdAnon,
+        appId: config!.appId,
       });
     }
 
@@ -428,9 +443,9 @@ export const Pionne = {
       console.log(
         '[Pionne] initialized',
         '·',
-        'env=' + config.environment,
+        'env=' + config!.environment,
         '·',
-        'release=' + (config.release ?? '—'),
+        'release=' + (config!.release ?? '—'),
       );
     }
     } catch (e) {
