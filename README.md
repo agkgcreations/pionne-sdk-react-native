@@ -66,6 +66,8 @@ npx @pionne/react-native setup
 
 À chaque `eas build`, les `.map` sont uploadés tout seuls. En prod tes stack traces s'affichent en `App.tsx:42 (CheckoutScreen)` au lieu de `bundle:3:18745`.
 
+> **Note (≥ 0.8.2)** : les sourcemaps sont gzippées avant upload (~10× plus petites). Compatible avec les hébergeurs qui ont un `LimitRequestBody` Apache bas (O2switch, etc.). Le serveur Pionne détecte automatiquement le format compressé.
+
 ## API
 
 ```ts
@@ -218,6 +220,13 @@ API complète :
 **9,99 €/mois** ou 89,99 €/an. 30 jours d'essai (carte non requise). 50 000 events/mois, projets illimités, rétention 30j.
 
 [Docs complètes](https://pionne.agkgcreations.fr/quickstart)
+
+## Changelog
+
+- **0.8.2** — CLI : sourcemaps gzippées automatiquement avant upload (~10× plus petites). Passe les `LimitRequestBody` Apache bas des hébergeurs mutualisés (O2switch, etc.). Le serveur Pionne décode de manière transparente.
+- **0.8.0** — Profiling Hermes : `Pionne.startProfile / stopProfile / profile`.
+- **0.7.x** — CLI bilingue (en/fr), auto-pick projet via `app.json:expo.name`, pre-check des EAS env vars.
+- **0.5.0** — Release Health (sessions crash-free user rate), feedback widget, geo IP-side.
 
 ## License
 
