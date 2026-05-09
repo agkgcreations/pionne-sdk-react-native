@@ -15,6 +15,13 @@ import {
   sendFeedback as _sendFeedback,
 } from './feedback';
 import { PionneFeedbackModal } from './feedback-modal';
+import {
+  configureProfiler,
+  profile as _profile,
+  type ProfileMeta,
+  startProfile as _startProfile,
+  stopProfile as _stopProfile,
+} from './profile';
 import { captureScreenshot, setRootRef as _setRootRef } from './screenshot';
 import { DEFAULT_PATTERNS, scrubDeep, type ScrubPattern } from './scrubber';
 import { RateLimiter, validateEndpoint, validateToken } from './security';
@@ -31,10 +38,11 @@ import type {
   MechanismType,
   PionneEvent,
   PionneOptions,
+  ProfilePayload,
 } from './types';
 
 export { PionneErrorBoundary, PionneFeedbackModal };
-export type { Breadcrumb, FeedbackPayload };
+export type { Breadcrumb, FeedbackPayload, ProfileMeta };
 
 export type {
   Level,
@@ -42,6 +50,7 @@ export type {
   MechanismType,
   PionneEvent,
   PionneOptions,
+  ProfilePayload,
 };
 
 const DEFAULT_ENDPOINT = 'https://pionne.agkgcreations.fr/api/ingest';
@@ -346,6 +355,17 @@ export const Pionne = {
     }
     if (config.captureUnhandledRejections) installPromiseRejectionHandler();
 
+    // Profiler — wire up the same endpoint/token so Pionne.startProfile
+    // can ship samples without the dev passing them again. The actual
+    // sampler stays idle until startProfile() is called.
+    configureProfiler({
+      endpoint: config.endpoint,
+      token: config.token,
+      release: config.release,
+      environment: config.environment,
+      appVersion: staticContext.app_version,
+    });
+
     // Release Health — open a session unless the host opted out. We send
     // status='ok' immediately and rely on flipFromEvent() to upgrade to
     // 'crashed'/'errored' if a fatal hits.
@@ -537,5 +557,48 @@ export const Pionne = {
       token: config.token,
       appVersion: staticContext.app_version,
     };
+  },
+
+  // ─── Profiling (Hermes only) ──────────────────────────────────────────
+
+  /**
+   * Begin sampling the JS thread under a named profile. Pair with
+   * `Pionne.stopProfile()` (which uploads the trace) — call them around
+   * the code path you want to inspect in the dashboard's flame graph.
+   *
+   * No-op (returns false) on JSC or any runtime that doesn't expose
+   * Hermes' sampling profiler. Calling start while another profile is
+   * active flushes the previous one and starts fresh — favoring your
+   * latest intent.
+   *
+   * Example:
+   *   const ok = Pionne.startProfile('CheckoutFlow', { route: '/checkout' });
+   *   await runCheckout();
+   *   await Pionne.stopProfile();
+   */
+  startProfile(name: string, meta?: ProfileMeta): boolean {
+    return _startProfile(name, meta);
+  },
+
+  /**
+   * Stop the active profile and upload its samples to /api/profiles.
+   * Safe to call when no profile is running (no-op). Always resolves —
+   * monitoring SDKs must never throw. Returns the server-assigned
+   * `profile_id` on success, `null` on any failure.
+   */
+  stopProfile(): Promise<number | null> {
+    return _stopProfile();
+  },
+
+  /**
+   * Sugar — wraps a function/promise in start/stop. Returns whatever
+   * the wrapped fn returns (or rejects with). Profiling failures never
+   * block the wrapped fn.
+   *
+   * Example:
+   *   const order = await Pionne.profile('CheckoutFlow', () => createOrder(items));
+   */
+  profile<T>(name: string, fn: () => T | Promise<T>, meta?: ProfileMeta): Promise<T> {
+    return _profile(name, fn, meta);
   },
 };

@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.8.0 — 2026-05-09
+
+### Added
+
+- **Profiling (Hermes only).** Manual transaction-scoped CPU profiling
+  via `Pionne.startProfile(name, meta?)` / `Pionne.stopProfile()` and
+  the sugar `Pionne.profile(name, fn, meta?)`. Wraps Hermes' built-in
+  `enableSamplingProfiler` / `dumpSampledTrace` and ships the resulting
+  Chrome Trace Event blob to the new `POST /api/profiles` endpoint.
+  - **Overhead** : ~1–3 % CPU during capture, **zero when idle**.
+  - **JSC** : the API silently no-ops (returns false on start, null on
+    stop) — your app code doesn't need a runtime-engine check.
+  - **Server-side** : raw samples kept 7 days, aggregated nightly into
+    P50/P95/P99 per function × release (kept 90 days for cross-release
+    regression detection in the dashboard's flame graph view).
+  - Backend caps : 100k profiles/day/project, 8 MB max payload, shared
+    rate-limit bucket with `/ingest` (600 req/min/token).
+  - New types exported: `ProfileMeta`, `ProfilePayload`.
+
+## 0.7.7 — 2026-05-08
+
+### Documentation
+
+- README enrichi : nouveau bloc "Rate limit serveur" qui documente le cap
+  600 req/min/token côté API Pionne (ajout backend du même jour). Tableau
+  des options complété avec `maxEventsPerSecond`, `releaseHealth`,
+  `sendGeography`. Aucun changement de code SDK.
+
 ## 0.7.6 — 2026-05-08
 
 ### Improved

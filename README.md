@@ -156,6 +156,40 @@ npx @pionne/react-native upload-sourcemaps --platform ios
 npx @pionne/react-native --help
 ```
 
+## Profiling (Hermes only)
+
+Profile manuellement les écrans/transactions critiques pour visualiser un **flame graph** dans le dashboard mobile et détecter les régressions de perf entre releases.
+
+```ts
+// Wrap an entire transaction
+await Pionne.profile('CheckoutFlow', async () => {
+  await fetchCart();
+  await applyDiscount();
+  await submitOrder();
+}, { route: '/checkout' });
+
+// Or start/stop manually
+Pionne.startProfile('HomeScreenMount', { route: '/home' });
+// … your render path …
+await Pionne.stopProfile();
+```
+
+Le SDK utilise le sampler natif Hermes (`HermesInternal.dumpSampledTrace`) — overhead ~1–3 % CPU pendant la capture, **zéro overhead quand inactif**. JSC ne supporte pas le sampling : la fonction renvoie `false` silencieusement (un `console.info` en dev pour t'avertir).
+
+Les samples sont envoyés à `POST /api/profiles` (rate-limit partagé avec `/ingest`, cap 600 req/min/token + 100k profiles/jour/projet). Format : Chrome Trace Event Format brut, le serveur l'agrège chaque nuit en P50/P95/P99 par fonction.
+
+**Rétention** : 7 jours pour les samples bruts, 90 jours pour les agrégats (= cross-release regression chart). Configurable côté serveur si tu self-host.
+
+API complète :
+
+| Méthode | Rôle |
+|---|---|
+| `Pionne.startProfile(name, meta?)` | Démarre une capture. Idempotent si même `name`. |
+| `Pionne.stopProfile()` → `Promise<id \| null>` | Stop + upload, renvoie l'ID serveur. |
+| `Pionne.profile(name, fn, meta?)` | Sucre — wrap une fn ou Promise. |
+
+`meta` accepte `{ route?: string, eventId?: number }` — `eventId` lie le profile à un crash event spécifique pour le drill-down.
+
 ## Options
 
 | Option | Default | Description |

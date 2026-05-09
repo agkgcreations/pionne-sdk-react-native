@@ -264,3 +264,27 @@ export interface PionneOptions {
    */
   sendGeography?: boolean | { endpoint?: string; resolve?: () => Promise<GeoContext | null> };
 }
+
+// ─── Profiling — payload the SDK ships to POST /api/profiles ──────────
+
+export interface ProfilePayload {
+  /** Human-readable label set via Pionne.startProfile(name). */
+  name: string;
+  /** Wall-clock duration of the captured profile, in milliseconds. */
+  duration_ms: number;
+  /** Number of stack samples collected during the run. */
+  samples_count: number;
+  /** Sampler interval in microseconds — Hermes default = 1000 (1 ms). */
+  sample_interval_us: number;
+  /**
+   * Raw trace blob — Chrome Trace Event Format from Hermes (default), or
+   * collapsed-stack JSON (`[{ stack: 'a;b;c', weight_us: 123 }, …]`) if
+   * you transcoded another sampler. The backend's aggregator accepts
+   * both shapes.
+   */
+  samples: unknown;
+  /** Optional app route this profile relates to — '/checkout', etc. */
+  route?: string;
+  /** Optional crash event id to link this profile to in the dashboard. */
+  event_id?: number;
+}
