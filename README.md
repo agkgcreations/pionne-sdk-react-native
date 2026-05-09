@@ -176,9 +176,7 @@ await Pionne.stopProfile();
 
 Le SDK utilise le sampler natif Hermes (`HermesInternal.dumpSampledTrace`) — overhead ~1–3 % CPU pendant la capture, **zéro overhead quand inactif**. JSC ne supporte pas le sampling : la fonction renvoie `false` silencieusement (un `console.info` en dev pour t'avertir).
 
-Les samples sont envoyés à `POST /api/profiles` (rate-limit partagé avec `/ingest`, cap 600 req/min/token + 100k profiles/jour/projet). Format : Chrome Trace Event Format brut, le serveur l'agrège chaque nuit en P50/P95/P99 par fonction.
-
-**Rétention** : 7 jours pour les samples bruts, 90 jours pour les agrégats (= cross-release regression chart). Configurable côté serveur si tu self-host.
+Les samples sont envoyés à `POST /api/profiles` (rate-limit partagé avec `/ingest`). Format : Chrome Trace Event Format brut, agrégé en P50/P95/P99 par fonction côté serveur pour le flame graph + le diff cross-release.
 
 API complète :
 
@@ -211,7 +209,7 @@ API complète :
 | `appId` | auto | Bundle ID (anti-token-theft) |
 | `beforeSend` | — | Hook avant envoi (return null = drop) |
 | `maxStackFrames` | `50` | Frames sent par event |
-| `maxEventsPerSecond` | `10` | Token-bucket client. Au-delà, drop silencieux. `0` pour désactiver (déconseillé). Le serveur cap aussi à 600 req/min/token, indépendant. |
+| `maxEventsPerSecond` | `10` | Token-bucket client. Au-delà, drop silencieux. `0` pour désactiver (déconseillé). Le serveur a aussi son propre rate-limit par token, indépendant. |
 | `releaseHealth` | `true` | Open une session à `init()` pour calculer le crash-free user rate. |
 | `sendGeography` | `false` | Opt-in : attache `contexts.geo` (city/region/country) résolu IP-side. |
 

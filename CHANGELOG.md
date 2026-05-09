@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.1 — 2026-05-09
+
+### Documentation
+
+- README clarifié : retire les valeurs internes précises sur les caps
+  serveur (rate-limit, payload size, retention) et remplace par des
+  formulations vagues. Ces détails restent applicables côté infra
+  mais ne sont plus exposés sur npm. Aucun changement de code SDK.
+
 ## 0.8.0 — 2026-05-09
 
 ### Added
