@@ -239,18 +239,49 @@ function doSend(event: PionneEvent): Promise<boolean> {
       }
       // 401/403 = config problem (token invalide / bundle mismatch). 422 =
       // validation. Toutes ces erreurs ne se résoudront jamais en retry — on
-      // les surface au moins une fois pour que le dev les voie en TestFlight.
+      // les surface au moins une fois (même en prod, ex: TestFlight) pour
+      // que le dev les voie sans avoir à inspecter le réseau.
       if (!res.ok && (res.status === 401 || res.status === 403 || res.status === 422)) {
         if (!warnedPermFailure) {
           warnedPermFailure = true;
           let body = '';
           try { body = await res.text(); } catch { /* ignore */ }
+          // Try to parse a JSON error envelope so we can craft a specific
+          // message per failure mode. Falls back to the raw body if parsing
+          // fails or the server returned plain text/html.
+          type ErrorEnvelope = { message?: string; expected_format?: string };
+          let parsed: ErrorEnvelope | null = null;
+          try { parsed = JSON.parse(body) as ErrorEnvelope; } catch { /* not JSON */ }
+          const sentAppId = event.app_id ?? '<unset>';
+          const serverMsg = parsed?.message ?? body.slice(0, 200);
           // eslint-disable-next-line no-console
-          console.warn(
-            '[Pionne] event rejected (permanent) — status=' + res.status +
-            ' body=' + body.slice(0, 200) +
-            '. Subsequent rejections will be silent. Check token + project bundle_id.',
-          );
+          const warn = console.warn;
+
+          if (res.status === 403 && /bundle\s*id/i.test(serverMsg)) {
+            warn(
+              `[Pionne] Bundle ID mismatch — your project rejects events from app_id="${sentAppId}". ` +
+              `Server expected "${parsed?.expected_format ?? 'unknown'}" (1st char masked for safety). ` +
+              `Fix it in your Pionne project Settings → Bundle ID to match your native app, ` +
+              `or clear the field to disable the check (rétrocompat). ` +
+              `Subsequent rejections will be silent for this session.`,
+            );
+          } else if (res.status === 401) {
+            warn(
+              `[Pionne] Token rejected (401). Check EXPO_PUBLIC_PIONNE_TOKEN matches your project token ` +
+              `(starts with "pio_live_…"). Server said: ${serverMsg}. ` +
+              `Subsequent rejections will be silent for this session.`,
+            );
+          } else if (res.status === 422) {
+            warn(
+              `[Pionne] Event rejected (422 validation): ${serverMsg}. ` +
+              `Sent app_id="${sentAppId}". Subsequent rejections will be silent for this session.`,
+            );
+          } else {
+            warn(
+              `[Pionne] Event rejected (status=${res.status}): ${serverMsg}. ` +
+              `Sent app_id="${sentAppId}". Subsequent rejections will be silent for this session.`,
+            );
+          }
         }
       }
       return res.ok;

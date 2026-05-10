@@ -237,6 +237,8 @@ API complète :
 
 ## Changelog
 
+- **0.8.6** — Permanent rejection (401/403/422) : message d'erreur enrichi côté SDK. Le `console.warn` (loggé une fois même en prod, type TestFlight) parse le JSON de réponse, distingue les cas (Bundle ID mismatch / token rejected / 422 validation), affiche l'`app_id` envoyé + l'`expected_format` masqué retourné par le serveur, et donne une instruction actionnable (où corriger). Pas de breaking change.
+- **0.8.5** — `enableInDev` option pour rendre `init()` no-op en `__DEV__`.
 - **0.8.2** — CLI : sourcemaps gzippées automatiquement avant upload (~10× plus petites). Passe les `LimitRequestBody` Apache bas des hébergeurs mutualisés (O2switch, etc.). Le serveur Pionne décode de manière transparente.
 - **0.8.0** — Profiling Hermes : `Pionne.startProfile / stopProfile / profile`.
 - **0.7.x** — CLI bilingue (en/fr), auto-pick projet via `app.json:expo.name`, pre-check des EAS env vars.
