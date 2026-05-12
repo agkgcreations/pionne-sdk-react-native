@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.8.7 — 2026-05-12
+
+### Fixed
+
+- **`pionne setup` now detects already-configured EAS variables.** The
+  pre-flight check ran `eas env:list --format short`, whose output is
+  `NAME=value` per line (and `NAME=***** (secret)` for secret vars), but
+  the matcher expected whitespace after the variable name — so it never
+  matched. Result: the wizard always announced "No existing PIONNE_*
+  variables — fresh install", never showed the "Overwrite? (y/N)"
+  prompt, and silently re-created all 9 entries on every run. The regex
+  now accepts `=`, whitespace, or end-of-line after the name, so it
+  works for both the `short` and `long` (table) output formats.
+
+## 0.8.6 — 2026-05-10
+
+### Changed
+
+- **Actionable error on permanent ingest rejection (401/403/422).**
+  `doSend()` now parses the JSON error envelope, distinguishes the
+  failure modes (Bundle ID mismatch / token rejected / 422 validation),
+  and emits a single `console.warn` (once per session, in prod too —
+  e.g. TestFlight) that includes the `app_id` the SDK actually sent, the
+  masked `expected_format` returned by the server, and a clear pointer
+  to where to fix it. Resolves the silent-rejection footgun. No breaking
+  change.
+
 ## 0.8.5 — 2026-05-09
 
 ### Added

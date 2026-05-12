@@ -237,6 +237,7 @@ API complète :
 
 ## Changelog
 
+- **0.8.7** — `pionne setup` : la pré-vérification détecte enfin les variables EAS déjà configurées (le parseur attendait un espace après le nom, alors qu'`eas env:list --format short` sort `NOM=valeur`). Le wizard affichait toujours « installation propre » et recréait les 9 entrées en silence à chaque run. Fix CLI uniquement.
 - **0.8.6** — Permanent rejection (401/403/422) : message d'erreur enrichi côté SDK. Le `console.warn` (loggé une fois même en prod, type TestFlight) parse le JSON de réponse, distingue les cas (Bundle ID mismatch / token rejected / 422 validation), affiche l'`app_id` envoyé + l'`expected_format` masqué retourné par le serveur, et donne une instruction actionnable (où corriger). Pas de breaking change.
 - **0.8.5** — `enableInDev` option pour rendre `init()` no-op en `__DEV__`.
 - **0.8.2** — CLI : sourcemaps gzippées automatiquement avant upload (~10× plus petites). Passe les `LimitRequestBody` Apache bas des hébergeurs mutualisés (O2switch, etc.). Le serveur Pionne décode de manière transparente.

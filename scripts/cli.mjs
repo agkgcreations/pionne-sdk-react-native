@@ -530,7 +530,11 @@ function listExistingPionneVars(envs, names, progress) {
     );
     if (r.status !== 0) continue;
     const out = String(r.stdout || '');
-    const present = names.filter((n) => new RegExp(`(^|\\s)${n}(\\s|$)`, 'm').test(out));
+    // `eas env:list --format short` prints one `NAME=value` per line (secret
+    // vars show `NAME=***** (secret)`), so the name is followed by `=` — not
+    // whitespace. Match a `=`, whitespace, or end-of-line after the name so
+    // detection works for both the short and long (table) output formats.
+    const present = names.filter((n) => new RegExp(`(^|\\s)${n}(?=[=\\s]|$)`, 'm').test(out));
     if (present.length) found.push({ env, names: present });
   }
   return found;
