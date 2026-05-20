@@ -35,7 +35,7 @@ Pionne est mobile-first : tu génères et tu visualises tes erreurs **depuis l'a
 
 1. **Télécharge l'app Pionne** :
    - 🍎 [App Store](https://apps.apple.com/app/pionne) *(à venir)*
-   - 🤖 [Google Play](https://play.google.com/store/apps/details?id=fr.agkgcreations.pionne) *(à venir)*
+   - 🤖 [Google Play](https://play.google.com/store/apps/details?id=fr.agkgcreations.pionne)
 2. Crée ton compte (30 jours gratuits, carte non requise)
 3. **+ Nouveau projet** → choisis ta plateforme → copie le token affiché en grand (commence par `pio_live_…`)
 4. Colle-le dans ton app via `Pionne.init({ token })` (cf ci-dessous)
