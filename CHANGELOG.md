@@ -65,7 +65,7 @@
   The fix turns `send` into `Promise<boolean>` and only flips the
   session if the event actually landed (HTTP 2xx). Manual captures
   (`captureException`, `captureMessage`) still don't touch session
-  health (Sentry parity). On bundle mismatch, the dev still sees the
+  health. On bundle mismatch, the dev still sees the
   "[Pionne] event rejected (permanent)" warning so they can fix the
   config — they just no longer get a misleading session marker.
 
@@ -407,7 +407,7 @@
 
 ## 0.3.0 — 2026-05-05
 
-- Auto-context Sentry-style (device, OS, app, OTA, runtime, expo_constants, sdk).
+- Auto-context (device, OS, app, OTA, runtime, expo_constants, sdk).
 - Hermes rejection tracker.
 - `app_id` envoyé automatiquement.
 

@@ -1,8 +1,8 @@
 # @pionne/react-native
 
-Mini Sentry mobile-first SDK pour React Native + Expo.
+SDK de monitoring d'erreurs mobile-first pour React Native + Expo.
 
-3 lignes pour capturer toutes les erreurs JS, voir les stacks lisibles en prod, et tout ça pour **9,99 €/mois** au lieu de 79 €.
+3 lignes pour capturer toutes les erreurs JS et voir les stacks lisibles en prod.
 
 - 🪶 **~22 KB** une fois bundlé, zéro dépendance
 - 🛜 Marche avec **Expo, bare RN, Hermes & JSC**
@@ -229,9 +229,9 @@ API complète :
 | `releaseHealth` | `true` | Open une session à `init()` pour calculer le crash-free user rate. |
 | `sendGeography` | `false` | Opt-in : attache `contexts.geo` (city/region/country) résolu IP-side. |
 
-## Pricing
+## Abonnement
 
-**9,99 €/mois** ou 89,99 €/an. 30 jours d'essai (carte non requise). 50 000 events/mois, projets illimités, rétention 30j.
+30 jours d'essai, carte non requise. Tarifs et souscription dans l'app mobile Pionne (App Store / Play Store).
 
 [Docs complètes](https://pionne.agkgcreations.fr/quickstart)
 
