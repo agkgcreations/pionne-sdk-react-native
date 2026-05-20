@@ -166,7 +166,7 @@ export const SDK_VERSION = '0.3.0';
 /**
  * Inspect everything the host app exposes at startup — synchronously — and
  * return both the legacy flat fields (for indexable filtering) and the
- * Sentry-style nested `contexts` object (for full UI display).
+ * nested `contexts` object (for full UI display).
  */
 export function gatherStaticContext(): Partial<PionneEvent> {
   const out: Partial<PionneEvent> = {};

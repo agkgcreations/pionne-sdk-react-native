@@ -496,7 +496,7 @@ export const Pionne = {
   captureException(err: unknown, extra?: Partial<PionneEvent>): void {
     const event = buildEvent(err, extra?.level ?? 'error', 'manual', true, extra);
     // No flipFromEvent on manual captures: the dev chose to record this
-    // event explicitly (e.g. caught + handled). Sentry parity — manual
+    // event explicitly (e.g. caught + handled). Manual
     // capture doesn't affect session health.
     if (event) void send(event);
   },

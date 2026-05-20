@@ -12,7 +12,7 @@ export interface Mechanism {
 }
 
 // =====================================================================
-// CONTEXTS — Sentry-style nested groups. Every key is optional; the SDK
+// CONTEXTS — nested groups. Every key is optional; the SDK
 // fills in what it can detect at runtime, and the API stores it as JSON.
 // =====================================================================
 
@@ -162,7 +162,7 @@ export interface PionneEvent {
   locale?: string;
   timezone?: string;
 
-  // ─── Sentry-style nested ──────────────────────────────────────
+  // ─── nested ──────────────────────────────────────
   contexts?: PionneContexts;
   mechanism?: Mechanism;
   breadcrumbs?: Array<Record<string, unknown>>;
@@ -196,8 +196,7 @@ export interface PionneOptions {
    * Pass `false` to silence the SDK in dev — useful to avoid polluting
    * the production dashboard with noise from local debugging, and to
    * sidestep bundle ID mismatches between Expo Go (`host.exp.Exponent`)
-   * and the bundle ID pinned on your project. Mirrors Sentry's
-   * `enableInExpoDevelopment` / `debug` philosophy.
+   * and the bundle ID pinned on your project.
    *
    * When false in `__DEV__`, `init()` is a no-op (no global handlers
    * installed, no session opened, no geo lookup). All `Pionne.captureXxx`

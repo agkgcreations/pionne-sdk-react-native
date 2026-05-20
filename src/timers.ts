@@ -1,5 +1,5 @@
 // Wrap setTimeout / setInterval / requestAnimationFrame pour capturer les
-// exceptions synchrones lancées dans leur callback. C'est ce que fait Sentry,
+// exceptions synchrones lancées dans leur callback. C'est l'approche standard,
 // et ça résout le cas typique `setTimeout(() => { throw ... }, 50)` que
 // `ErrorUtils.setGlobalHandler` n'attrape pas toujours sur Hermes en dev.
 

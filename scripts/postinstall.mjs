@@ -2,7 +2,7 @@
 //
 // Affiché à l'install du package. Aucun effet de bord (pas d'écriture de
 // fichiers chez l'user, pas d'appel réseau, pas de prompt) — pour ne jamais
-// casser un build CI ou un install transitive (Sentry-style).
+// casser un build CI ou un install transitive.
 //
 
 // Skip si on est dans un install transitive (= pas le dossier où l'user a
