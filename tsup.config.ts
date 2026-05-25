@@ -16,6 +16,7 @@ export default defineConfig({
     'expo-device',
     'expo-updates',
     'expo-constants',
+    'expo-modules-core',
     '@react-native-async-storage/async-storage',
   ],
   // RN runtime → JS lisible, pas de minification

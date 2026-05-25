@@ -8,6 +8,7 @@ import {
 import { gatherStaticContext } from './context';
 import { PionneErrorBoundary } from './error-boundary';
 import { fetchGeo, getGeo } from './geo';
+import { getPendingNativeCrashes } from './native-crash';
 import {
   type FeedbackContext,
   type FeedbackPayload,
@@ -295,6 +296,38 @@ function doSend(event: PionneEvent): Promise<boolean> {
     });
 }
 
+/**
+ * Drain the native crashes the OS recorded on previous run(s) and replay each
+ * as a `fatal` event. These come from a *past* process, so we use plain
+ * `send()` — never `sendThenFlip()`, which would wrongly mark the *current*
+ * session as crashed.
+ *
+ * Runs once at init and once ~5s later: MetricKit delivers its payload
+ * asynchronously a few seconds into the launch that follows the crash, so the
+ * delayed pass catches a crash surfaced during this very session. The native
+ * `getPendingNativeCrashes()` clears on read, so the two passes never
+ * double-report.
+ */
+function replayNativeCrashes(): void {
+  void getPendingNativeCrashes().then((records) => {
+    for (const r of records) {
+      const err = new Error(r.message || r.type || 'Native crash');
+      err.name = r.type || 'NativeCrash';
+      const event = buildEvent(err, 'fatal', 'native', false, {
+        stack: r.stack && r.stack.length ? r.stack : undefined,
+        app_version: r.appVersion ?? staticContext.app_version,
+        os_version: r.osVersion ?? staticContext.os_version,
+        tags: {
+          ...(config?.tags ?? {}),
+          'native.source': r.platform === 'ios' ? 'metrickit' : 'app_exit',
+          'native.crashed_at': new Date(r.timestamp).toISOString(),
+        },
+      });
+      if (event) void send(event);
+    }
+  });
+}
+
 function installGlobalErrorHandler(): void {
   // ErrorUtils is a React Native global — we type it loosely to avoid pulling
   // RN types into this isolated SDK package.
@@ -384,6 +417,7 @@ export const Pionne = {
       enabled: options.enabled ?? true,
       captureUncaughtErrors: options.captureUncaughtErrors ?? true,
       captureUnhandledRejections: options.captureUnhandledRejections ?? true,
+      captureNativeCrashes: options.captureNativeCrashes ?? true,
       autoContext,
       beforeSend: options.beforeSend,
       userIdAnon: options.userIdAnon,
@@ -443,6 +477,14 @@ export const Pionne = {
         userIdAnon: config!.userIdAnon,
         appId: config!.appId,
       });
+    }
+
+    // Native crashes from previous run(s) (MetricKit / ApplicationExitInfo).
+    // No-op in Expo Go / web where the native module isn't linked.
+    if (config.captureNativeCrashes) {
+      replayNativeCrashes();
+      // Second pass: MetricKit delivers ~a few seconds after launch.
+      setTimeout(replayNativeCrashes, 5000);
     }
 
     // Geography lookup (opt-in). Fire-and-forget — the result is cached

@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["PionneNativeModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.pionne.PionneNativeModule"]
+  }
+}

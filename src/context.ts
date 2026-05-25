@@ -161,7 +161,7 @@ function detectHermes(): { hermes: boolean; version?: string; debugInfo?: boolea
 // =====================================================================
 
 export const SDK_NAME = '@pionne/react-native';
-export const SDK_VERSION = '0.3.0';
+export const SDK_VERSION = '0.9.0';
 
 /**
  * Inspect everything the host app exposes at startup — synchronously — and

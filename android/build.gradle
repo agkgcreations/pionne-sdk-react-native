@@ -1,0 +1,16 @@
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+apply plugin: 'expo-module-gradle-plugin'
+
+group = 'fr.pionne'
+version = '0.9.0'
+
+android {
+  namespace "expo.modules.pionne"
+
+  defaultConfig {
+    // ApplicationExitInfo is API 30 (Android 11); the Kotlin gates on it at
+    // runtime so the module installs fine on older minSdk hosts.
+    minSdkVersion 21
+  }
+}

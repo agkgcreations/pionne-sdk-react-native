@@ -4,7 +4,12 @@ export type MechanismType =
   | 'onerror'
   | 'onunhandledrejection'
   | 'manual'
-  | 'react_error_boundary';
+  | 'react_error_boundary'
+  // Native crash (Objective-C/Swift exception, signal, OOM, ANR…) captured by
+  // the OS and replayed on the next launch via MetricKit (iOS) /
+  // ApplicationExitInfo (Android). Requires a dev/production build — never
+  // fires in Expo Go.
+  | 'native';
 
 export interface Mechanism {
   type: MechanismType;
@@ -207,6 +212,18 @@ export interface PionneOptions {
   captureUncaughtErrors?: boolean;
   /** Auto-capture unhandled promise rejections. Default: true. */
   captureUnhandledRejections?: boolean;
+  /**
+   * Capture **native** crashes (Objective-C/Swift exceptions, signals like
+   * SIGSEGV/SIGABRT, OOM kills, ANRs) that take down the whole process before
+   * any JS handler can run. The OS records them (MetricKit on iOS 14+,
+   * ApplicationExitInfo on Android 11+) and the SDK replays them as `fatal`
+   * events on the **next launch**.
+   *
+   * Requires a development or production build (`expo prebuild` / EAS) — the
+   * native module is absent from Expo Go, where this option silently no-ops.
+   * Default: true.
+   */
+  captureNativeCrashes?: boolean;
   /** Auto-detect device + app + OTA + runtime context. Default: true. */
   autoContext?: boolean;
   /** Last hook before sending — return null to drop the event. */
