@@ -7,6 +7,7 @@ SDK de monitoring d'erreurs mobile-first pour React Native + Expo.
 - 🪶 **~22 KB** une fois bundlé, zéro dépendance
 - 🛜 Marche avec **Expo, bare RN, Hermes & JSC**
 - 🎯 Auto-capture: exceptions JS, unhandled rejections, throws dans setTimeout
+- 💥 **Crashs natifs** (iOS MetricKit / Android ApplicationExitInfo) rejoués au lancement suivant
 - 🔌 Manuel: `captureException` / `captureMessage` / `wrap` / `<PionneErrorBoundary>`
 - 🍞 **Breadcrumbs auto** (console + fetch) attachés à chaque event
 - 📸 **Capture d'écran** opt-in attachée à chaque erreur
@@ -158,6 +159,16 @@ export default function App() {
 
 À chaque erreur, un JPG (qualité 0.5) de la vue racine est attaché. Visible dans le tab "Capture" du détail issue.
 
+## Crashs natifs
+
+Les handlers JS ne voient **jamais** un crash natif (exception Objective-C/Swift, signal `SIGSEGV`/`SIGABRT`, kill mémoire, ANR Android) : le process entier meurt avant qu'aucun JS ne tourne. Pionne s'appuie sur l'OS — **MetricKit** (iOS 14+) et **ApplicationExitInfo** (Android 11+) — pour les enregistrer, et les rejoue en events `fatal` (`mechanism.type = "native"`) au **lancement suivant**.
+
+```ts
+Pionne.init({ token, captureNativeCrashes: true }); // défaut: true
+```
+
+> ⚠️ Nécessite un **development build** ou un **build de production** (`expo prebuild` / EAS Build) — le module natif est absent d'Expo Go, où l'option est silencieusement ignorée (aucun crash). Après l'install, relance `npx expo prebuild` (ou `pod install`) pour lier le module. iOS deployment target ≥ 13.4.
+
 ## CLI
 
 ```bash
@@ -215,6 +226,7 @@ API complète :
 | `enableInDev` | `true` | Set to `false` to make `init()` no-op in `__DEV__`. Recommandé pour ne pas polluer le dashboard prod avec des events Expo Go / Metro. |
 | `captureUncaughtErrors` | `true` | ErrorUtils + timer wrapping |
 | `captureUnhandledRejections` | `true` | Hermes rejection tracker |
+| `captureNativeCrashes` | `true` | Crashs natifs (iOS MetricKit / Android ApplicationExitInfo), rejoués au lancement suivant. Requiert un build dev/prod (no-op en Expo Go). |
 | `breadcrumbs` | `true` | Auto-instrument console + fetch |
 | `scrubPii` | `true` | Scrub email/CB/IBAN/JWT/IP/tokens |
 | `sampleRate` | `1` | Drop ratio (0..1) |
@@ -237,6 +249,7 @@ API complète :
 
 ## Changelog
 
+- **0.9.0** — Capture des **crashs natifs** : MetricKit (iOS 14+) + ApplicationExitInfo (Android 11+), rejoués en events `fatal` (`mechanism.type=native`) au lancement suivant. Le SDK embarque désormais un module natif Expo → requiert `expo prebuild` + un build dev/prod (no-op en Expo Go). Nouvelle option `captureNativeCrashes` (défaut `true`). Aligne `SDK_VERSION` sur la version du package.
 - **0.8.7** — `pionne setup` : la pré-vérification détecte enfin les variables EAS déjà configurées (le parseur attendait un espace après le nom, alors qu'`eas env:list --format short` sort `NOM=valeur`). Le wizard affichait toujours « installation propre » et recréait les 9 entrées en silence à chaque run. Fix CLI uniquement.
 - **0.8.6** — Permanent rejection (401/403/422) : message d'erreur enrichi côté SDK. Le `console.warn` (loggé une fois même en prod, type TestFlight) parse le JSON de réponse, distingue les cas (Bundle ID mismatch / token rejected / 422 validation), affiche l'`app_id` envoyé + l'`expected_format` masqué retourné par le serveur, et donne une instruction actionnable (où corriger). Pas de breaking change.
 - **0.8.5** — `enableInDev` option pour rendre `init()` no-op en `__DEV__`.
