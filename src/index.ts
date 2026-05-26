@@ -328,6 +328,33 @@ function replayNativeCrashes(): void {
   });
 }
 
+/**
+ * True when re-invoking React Native's default error handler would crash the
+ * app via the iOS-26 new-architecture void-TurboModule re-throw bug
+ * (facebook/react-native#54859): RN reports through a *void* TurboModule method
+ * (RCTExceptionsManager.reportException) and the new-arch runtime re-throws it
+ * on an async dispatch queue with nothing to catch → SIGABRT at launch. Scoped
+ * tightly to the exact affected surface: production builds, iOS 26+, new arch.
+ */
+function suppressNativeRethrow(): boolean {
+  if (isDev()) return false;
+  const g = globalThis as Record<string, unknown>;
+  const newArch =
+    typeof g.__turboModuleProxy !== 'undefined' || g.RN$Bridgeless === true;
+  if (!newArch) return false;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const RN = require('react-native') as {
+      Platform?: { OS?: string; Version?: string | number };
+    };
+    if (RN?.Platform?.OS !== 'ios') return false;
+    const major = parseInt(String(RN.Platform.Version ?? ''), 10);
+    return Number.isNaN(major) || major >= 26;
+  } catch {
+    return false;
+  }
+}
+
 function installGlobalErrorHandler(): void {
   // ErrorUtils is a React Native global — we type it loosely to avoid pulling
   // RN types into this isolated SDK package.
@@ -342,6 +369,14 @@ function installGlobalErrorHandler(): void {
   eu.setGlobalHandler((err, isFatal) => {
     const event = buildEvent(err, isFatal ? 'fatal' : 'error', 'onerror', false);
     if (event) sendThenFlip(event);
+    // We've already captured the error. On the iOS-26 new-arch surface where
+    // re-invoking RN's default handler aborts the process (react-native#54859),
+    // log and stop instead of crashing the host app.
+    if (suppressNativeRethrow()) {
+      // eslint-disable-next-line no-console
+      console.error('[Pionne] Uncaught JS error (RN#54859 native re-throw suppressed):', err);
+      return;
+    }
     originalErrorHandler?.(err, isFatal);
   });
 }
