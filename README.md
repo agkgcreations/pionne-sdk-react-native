@@ -161,13 +161,25 @@ export default function App() {
 
 ## Crashs natifs
 
-Les handlers JS ne voient **jamais** un crash natif (exception Objective-C/Swift, signal `SIGSEGV`/`SIGABRT`, kill mémoire, ANR Android) : le process entier meurt avant qu'aucun JS ne tourne. Pionne s'appuie sur l'OS — **MetricKit** (iOS 14+) et **ApplicationExitInfo** (Android 11+) — pour les enregistrer, et les rejoue en events `fatal` (`mechanism.type = "native"`) au **lancement suivant**.
+Les handlers JS ne voient **jamais** un crash natif : le process entier meurt avant qu'aucun JS ne tourne. Pionne s'appuie sur l'OS pour les enregistrer et les rejoue en events `fatal` (`mechanism.type = "native"`) au **lancement suivant**.
 
 ```ts
 Pionne.init({ token, captureNativeCrashes: true }); // défaut: true
 ```
 
-> ⚠️ Nécessite un **development build** ou un **build de production** (`expo prebuild` / EAS Build) — le module natif est absent d'Expo Go, où l'option est silencieusement ignorée (aucun crash). Après l'install, relance `npx expo prebuild` (ou `pod install`) pour lier le module. iOS deployment target ≥ 13.4.
+**Ce qui est capturé sur iOS 14+** via MetricKit :
+- `NSException` Obj-C/Swift (nom + message structuré sur iOS 17+, ex. `NSInvalidArgumentException`)
+- Signaux : `SIGSEGV`, `SIGABRT`, `SIGBUS`, `SIGILL`, `SIGFPE`, `SIGTRAP`
+- Kills mémoire (OOM) et terminations watchdog (`0x8badf00d`)
+- Call stack tree (frames système symbolisées, frames app en `binaryName 0xADDR`)
+
+**Ce qui est capturé sur Android 11+** via `ApplicationExitInfo` :
+- `REASON_CRASH` — exception JVM non catchée
+- `REASON_CRASH_NATIVE` — crash NDK (C/C++)
+- `REASON_ANR` — Application Not Responding (avec trace)
+- `REASON_LOW_MEMORY` — kill mémoire
+
+> ⚠️ Nécessite un **development build** ou un **build de production** (`expo prebuild` / EAS Build) — le module natif est absent d'Expo Go, où l'option est silencieusement ignorée (aucun crash). Après l'install, relance `npx expo prebuild` (ou `pod install`) pour lier le module. iOS deployment target ≥ 13.4. Tag `native.source` = `metrickit` (iOS) ou `app_exit` (Android).
 
 ## CLI
 
