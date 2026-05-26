@@ -35,8 +35,8 @@ npx expo install @react-native-async-storage/async-storage  # pour la queue offl
 Pionne est mobile-first : tu génères et tu visualises tes erreurs **depuis l'app mobile Pionne**, pas depuis un panneau web qui scrolle mal sur téléphone.
 
 1. **Télécharge l'app Pionne** :
-   - 🍎 [App Store](https://apps.apple.com/app/pionne) *(à venir)*
-   - 🤖 [Google Play](https://play.google.com/store/apps/details?id=fr.agkgcreations.pionne)
+   - 🍎 [App Store](https://apps.apple.com/app/id6766753270) *(à venir)*
+   - [<img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="40"/>](https://play.google.com/store/apps/details?id=fr.agkgcreations.pionne)
 2. Crée ton compte (30 jours gratuits, carte non requise)
 3. **+ Nouveau projet** → choisis ta plateforme → copie le token affiché en grand (commence par `pio_live_…`)
 4. Colle-le dans ton app via `Pionne.init({ token })` (cf ci-dessous)
