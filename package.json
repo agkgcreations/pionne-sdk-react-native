@@ -1,6 +1,6 @@
 {
   "name": "@pionne/react-native",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Mobile-first error monitoring SDK for React Native + Expo. Auto-captures JS crashes, unhandled rejections, breadcrumbs (console + fetch), screenshots. Release Health (crash-free user rate), in-app feedback widget, bundle ID auto-pinning, PII scrubber, source map resolution, Error Boundary, sample rate. CLI bundled.",
   "license": "MIT",
   "author": "AGKG Creations",

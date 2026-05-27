@@ -1,6 +1,6 @@
-// Capture d'écran opt-in — différenciateur mobile-first (PDF §11).
-// Best-effort, jamais bloquant : si `react-native-view-shot` n'est pas
-// installé, on skip silencieusement.
+// Opt-in screenshot capture — mobile-first differentiator.
+// Best-effort, never blocking: if `react-native-view-shot` isn't installed
+// we skip silently.
 
 let rootRef: { current: unknown } | null = null;
 

@@ -1,6 +1,6 @@
-// Ring buffer + auto-instrumentation console + fetch.
-// À chaque event Pionne, on attache les N derniers breadcrumbs → on voit ce
-// que l'user faisait juste avant le crash (PDF V1.1+).
+// Ring buffer + console + fetch auto-instrumentation.
+// On every Pionne event we attach the last N breadcrumbs → you see what the
+// user was doing right before the crash.
 
 export type Breadcrumb = {
   ts: number;
@@ -37,8 +37,8 @@ export function clearBreadcrumbs(): void {
 let consoleWrapped = false;
 
 /**
- * Wrap `console.log/info/warn/error` pour pousser des breadcrumbs.
- * Les originaux sont chaînés — l'output dev reste intact.
+ * Wrap `console.log/info/warn/error` to push breadcrumbs.
+ * The originals are chained — dev output stays intact.
  */
 export function wrapConsole(): void {
   if (consoleWrapped) return;
@@ -74,8 +74,8 @@ export function wrapConsole(): void {
 let fetchWrapped = false;
 
 /**
- * Wrap `fetch` pour pousser un breadcrumb par requête (méthode + URL + status + ms).
- * Idéal pour reconstituer "l'app a fait POST /api/order qui a 500 juste avant le crash".
+ * Wrap `fetch` to push one breadcrumb per request (method + URL + status + ms).
+ * Useful for reconstructing "the app did POST /api/order that 500'd right before the crash".
  */
 export function wrapFetch(): void {
   if (fetchWrapped) return;
@@ -117,8 +117,8 @@ export function wrapFetch(): void {
   }) as typeof fetch;
 }
 
-// Strip query string + auth bits — on garde juste le path pour ne pas
-// fuiter de PII (?token=…, ?email=…) dans les breadcrumbs.
+// Strip query string + auth bits — keep just the path so we don't leak
+// PII (?token=…, ?email=…) in the breadcrumbs.
 function stripUrl(url: string): string {
   try {
     const u = new URL(url);

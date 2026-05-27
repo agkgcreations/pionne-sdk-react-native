@@ -1,5 +1,5 @@
-// React Error Boundary intégrée — capte les erreurs lancées pendant le render
-// (que `ErrorUtils.setGlobalHandler` ne voit PAS).
+// Built-in React Error Boundary — captures errors thrown during render
+// (which `ErrorUtils.setGlobalHandler` does NOT see).
 // Usage:
 //   <PionneErrorBoundary fallback={<MyErrorScreen />}>
 //     <App />
@@ -7,17 +7,17 @@
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
-// Évite l'import circulaire: on accède à Pionne via globalThis (set par index.ts
-// au moment de l'init). Pas besoin d'API magique — c'est juste pour casser le cycle.
+// Avoids the circular import: we reach Pionne via globalThis (set by index.ts
+// at init time). No magic API — it's just to break the cycle.
 import type { Pionne as PionneType } from './index';
 
 type Props = {
   children: ReactNode;
-  /** Render quand une erreur a été captée. Reçoit l'erreur + reset(). */
+  /** Rendered when an error has been captured. Receives the error + reset(). */
   fallback?: ReactNode | ((args: { error: Error; reset: () => void }) => ReactNode);
-  /** Tags ajoutés à l'event Pionne. */
+  /** Tags added to the Pionne event. */
   tags?: Record<string, string>;
-  /** Hook custom appelé après la capture. */
+  /** Custom hook called after capture. */
   onError?: (error: Error, info: ErrorInfo) => void;
 };
 
@@ -39,8 +39,8 @@ export class PionneErrorBoundary extends Component<Props, State> {
       mechanism: { type: 'react_error_boundary', handled: false },
       tags: this.props.tags,
       contexts: {
-        // @ts-expect-error — contexts.react n'est pas dans PionneContexts mais
-        // c'est volontaire: backend l'accepte en clé libre dans payload.contexts.
+        // @ts-expect-error — contexts.react is not in PionneContexts but this
+        // is intentional: the backend accepts it as a free key in payload.contexts.
         react: { component_stack: info.componentStack },
       },
     });

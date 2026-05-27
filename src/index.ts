@@ -80,7 +80,7 @@ type ResolvedConfig = Required<
   tags?: Record<string, string>;
   release?: string;
   appId?: string;
-  /** Patterns finaux résolus à partir de scrubPii (booleen ou tableau). */
+  /** Final patterns resolved from scrubPii (boolean or array). */
   scrubPatterns?: ScrubPattern[];
 };
 
@@ -108,7 +108,7 @@ function buildEvent(
 ): PionneEvent | null {
   if (!config || !config.enabled) return null;
 
-  // Sample rate: drop aléatoire avant tout autre traitement.
+  // Sample rate: random drop before any other processing.
   if (config.sampleRate < 1 && Math.random() >= config.sampleRate) {
     return null;
   }
@@ -144,8 +144,8 @@ function buildEvent(
     event.breadcrumbs = crumbs;
   }
 
-  // PII scrubbing — appliqué APRÈS la construction et AVANT beforeSend, pour
-  // que le user puisse encore inspecter l'event nettoyé dans son hook.
+  // PII scrubbing — applied AFTER construction and BEFORE beforeSend, so
+  // the user can still inspect the cleaned event from their hook.
   if (config.scrubPatterns) {
     event = scrubDeep(event, config.scrubPatterns) as PionneEvent;
   }
@@ -181,8 +181,7 @@ function send(event: PionneEvent): Promise<boolean> {
     }
     return Promise.resolve(false);
   }
-  // Si captureScreenshot activé, on l'attache de manière async juste avant
-  // l'envoi.
+  // If captureScreenshot is on, attach it async just before send.
   if (config.captureScreenshot) {
     return (async () => {
       try {
@@ -238,10 +237,10 @@ function doSend(event: PionneEvent): Promise<boolean> {
         // eslint-disable-next-line no-console
         console.log('[Pionne] response', res.status);
       }
-      // 401/403 = config problem (token invalide / bundle mismatch). 422 =
-      // validation. Toutes ces erreurs ne se résoudront jamais en retry — on
-      // les surface au moins une fois (même en prod, ex: TestFlight) pour
-      // que le dev les voie sans avoir à inspecter le réseau.
+      // 401/403 = config problem (invalid token / bundle mismatch). 422 =
+      // validation. None of these will ever resolve via retry — surface them
+      // at least once (even in prod, e.g. TestFlight) so the dev sees them
+      // without having to inspect the network tab.
       if (!res.ok && (res.status === 401 || res.status === 403 || res.status === 422)) {
         if (!warnedPermFailure) {
           warnedPermFailure = true;
@@ -263,7 +262,7 @@ function doSend(event: PionneEvent): Promise<boolean> {
               `[Pionne] Bundle ID mismatch — your project rejects events from app_id="${sentAppId}". ` +
               `Server expected "${parsed?.expected_format ?? 'unknown'}" (1st char masked for safety). ` +
               `Fix it in your Pionne project Settings → Bundle ID to match your native app, ` +
-              `or clear the field to disable the check (rétrocompat). ` +
+              `or clear the field to disable the check (backwards compat). ` +
               `Subsequent rejections will be silent for this session.`,
             );
           } else if (res.status === 401) {
@@ -464,7 +463,7 @@ export const Pionne = {
       appId: options.appId ?? staticContext.app_id,
       // Sample rate clamp [0, 1].
       sampleRate: Math.max(0, Math.min(1, options.sampleRate ?? 1)),
-      // PII scrubbing : true => défauts, array => défauts + custom, false => skip.
+      // PII scrubbing: true => defaults, array => defaults + custom, false => skip.
       scrubPatterns:
         options.scrubPii === false
           ? undefined
@@ -617,8 +616,8 @@ export const Pionne = {
   },
 
   /**
-   * Reference vers la View racine pour la capture d'écran. Pas requis si
-   * `captureScreenshot` est désactivé. Pass `null` pour clear.
+   * Reference to the root View used for screenshot capture. Not required if
+   * `captureScreenshot` is off. Pass `null` to clear.
    */
   setRootRef(ref: { current: unknown } | null): void {
     _setRootRef(ref);
@@ -633,9 +632,9 @@ export const Pionne = {
   },
 
   /**
-   * Wrap une fonction (sync ou async) avec un try/catch qui capte
-   * automatiquement toute erreur et la rejoue. La signature de la fonction
-   * est conservée. Idéal pour les handlers d'évènements:
+   * Wrap a function (sync or async) with a try/catch that automatically
+   * captures any thrown error and re-throws it. The function signature is
+   * preserved. Ideal for event handlers:
    *   onPress={Pionne.wrap(async () => { ... })}
    */
   wrap<F extends (...args: unknown[]) => unknown>(fn: F, tags?: Record<string, string>): F {

@@ -152,7 +152,7 @@ export interface PionneEvent {
   environment?: string;
   app_version?: string;
   app_build?: string;
-  /** Bundle ID — vérifié contre `projects.bundle_id` si configuré. */
+  /** Bundle ID — checked against `projects.bundle_id` if the project has it set. */
   app_id?: string;
   os_name?: string;
   os_version?: string;
@@ -173,9 +173,9 @@ export interface PionneEvent {
   breadcrumbs?: Array<Record<string, unknown>>;
   tags?: Record<string, string>;
 
-  // ─── Screenshot — opt-in, capturée à l'envoi (PDF §11) ───────
-  // data URI base64 (image/jpeg|png). Le serveur la décode et la
-  // stocke en /storage/screenshots/{project}/{event}.jpg.
+  // ─── Screenshot — opt-in, captured at send time ───────
+  // base64 data URI (image/jpeg|png). The server decodes it and stores it
+  // at /storage/screenshots/{project}/{event}.jpg.
   screenshot?: string;
 }
 
@@ -235,36 +235,36 @@ export interface PionneOptions {
   /** Maximum stack frames sent. Default: 50. */
   maxStackFrames?: number;
   /**
-   * Bundle ID de l'app. Si le projet Pionne a un `bundle_id` configuré
-   * côté serveur, le SDK l'envoie dans `app_id` et l'API rejette les
-   * events qui ne matchent pas. Mitige le token theft.
-   * Auto-détecté via `expo-application` si non fourni.
+   * App bundle ID. If the Pionne project has `bundle_id` set server-side,
+   * the SDK ships it in `app_id` and the API rejects events that don't
+   * match. Mitigates token theft. Auto-detected via `expo-application`
+   * when not provided.
    */
   appId?: string;
   /**
-   * PII scrubbing — remplace email, CB, IBAN, JWT, IP, téléphone, tokens
-   * par des placeholders avant l'envoi. RGPD-friendly.
-   *  - `true` (défaut): patterns par défaut
-   *  - `false`: désactivé
-   *  - tableau: tes propres patterns en plus des défauts
+   * PII scrubbing — replaces email, card, IBAN, JWT, IP, phone, tokens
+   * with placeholders before send. GDPR-friendly.
+   *  - `true` (default): default patterns
+   *  - `false`: disabled
+   *  - array: your own patterns on top of the defaults
    */
   scrubPii?: boolean | Array<{ re: RegExp; replace: string }>;
   /**
-   * Drop-rate anti-flood: 1 = 100% des events partent, 0.1 = 10%.
-   * Défaut: 1. Utile pour les apps avec >100k events/jour.
+   * Anti-flood drop rate: 1 = 100% of events ship, 0.1 = 10%.
+   * Default: 1. Useful for apps with >100k events/day.
    */
   sampleRate?: number;
   /**
-   * Auto-instrumentation pour reconstituer ce que l'user faisait avant le crash.
+   * Auto-instrumentation to reconstruct what the user was doing before the crash.
    *  - `console`: wrap console.log/info/warn/error
-   *  - `fetch`: wrap fetch (méthode + URL stripped + status + ms)
-   * `true` (défaut) = les deux. Passe `false` ou `{ console: false }` pour cibler.
+   *  - `fetch`: wrap fetch (method + stripped URL + status + ms)
+   * `true` (default) = both. Pass `false` or `{ console: false }` to narrow.
    */
   breadcrumbs?: boolean | { console?: boolean; fetch?: boolean };
   /**
-   * Capture d'écran de la vue racine au moment de l'erreur (PDF §11).
-   * Nécessite la peer dep optionnelle `react-native-view-shot` et un
-   * `Pionne.setRootRef(ref)` une fois ton `<View>` racine monté.
+   * Screenshot of the root view at the moment of the error. Requires the
+   * optional peer dep `react-native-view-shot` and a `Pionne.setRootRef(ref)`
+   * once your root `<View>` is mounted.
    * Default: false.
    */
   captureScreenshot?: boolean;

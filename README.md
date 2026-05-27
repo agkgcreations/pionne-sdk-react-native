@@ -264,6 +264,7 @@ Full API:
 
 ## Changelog
 
+- **0.9.3** — All in-source code comments + JSDoc translated to English (the public-API JSDoc in `types.ts` ships in the `.d.ts` so this surfaces in IDE autocomplete). One stray French comment in `android/build.gradle` cleaned up. No API or behaviour change vs 0.9.2.
 - **0.9.2** — README fully translated to English (the 0.9.0 native-crash sections and several pre-existing pieces still had French copy). No API or behaviour change vs 0.9.1.
 - **0.9.1** — Fix launch crash on **iOS 26 + new architecture** (RN [#54859](https://github.com/facebook/react-native/issues/54859)): on this exact combo RN re-throws the captured error via a void TurboModule from an async dispatch queue → uncatchable `SIGABRT`. The SDK detects the affected surface (prod + iOS 26+ + new-arch) and suspends `originalErrorHandler` after capturing the event — log + return instead of crashing the host app. No change on any other environment. On Android, added `versionCode` / `versionName` required by Expo SDK 56 autolinking.
 - **0.9.0** — **Native crash capture**: MetricKit (iOS 14+) + ApplicationExitInfo (Android 11+), replayed as `fatal` events (`mechanism.type=native`) on the next launch. The SDK now ships an Expo native module → requires `expo prebuild` + a dev/prod build (no-op in Expo Go). New option `captureNativeCrashes` (default `true`). Aligns `SDK_VERSION` with the package version.
