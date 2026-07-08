@@ -33,9 +33,9 @@ npx expo install @react-native-async-storage/async-storage  # for the offline qu
 
 ## Get your token
 
-Pionne is mobile-first: you generate and view your errors **from the Pionne mobile app**, not from a web dashboard that scrolls poorly on phone.
+Generate and view your errors from the **[web dashboard](https://app.pionne.agkgcreations.fr)** or the **Pionne mobile app**.
 
-1. **Download the Pionne app**:
+1. **Open the [web dashboard](https://app.pionne.agkgcreations.fr)** — or download the app:
    - 🍎 [App Store](https://apps.apple.com/app/id6766753270) *(coming soon)*
    - [<img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="40"/>](https://play.google.com/store/apps/details?id=fr.agkgcreations.pionne)
 2. Create your account (30 days free, no card required)
@@ -63,7 +63,7 @@ In `__DEV__`, `init()` logs `[Pionne] Skipped in __DEV__ (enableInDev=false)` an
 import { Pionne } from '@pionne/react-native';
 
 Pionne.init({
-  token: 'pio_live_xxx',     // from the Pionne mobile app
+  token: 'pio_live_xxx',     // from your Pionne dashboard
   release: '1.0.0',
   environment: 'production',
 });
